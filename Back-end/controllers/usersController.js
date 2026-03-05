@@ -1,215 +1,147 @@
 import bcrypt from "bcrypt";
-import db from "../config/db.js";
+import jwt from "jsonwebtoken";
+import {
+  findUserByEmailOrUsername,
+  insertUser,
+  findUserByUsername,
+  findUserById,
+} from "../services/userService.js";
 
-export const registerUser = async (req, resp) => {
+export const registerUser = async (req, res) => {
   try {
-    const { firstName, lastName, userName, password, conformPassword, phone, email } = req.body;
+    const { firstName, lastName, userName, password, email, phone } = req.body;
 
-    if (!firstName || !lastName || !userName || !password || !conformPassword || !phone || !email) {
-      return resp.json({
-        success: false,
-        message: "All fields are mandatory",
-      });
+    const existingUsers = await findUserByEmailOrUsername(email, userName);
+
+    if (existingUsers.length > 0) {
+
+      const emailExists = existingUsers.some(user => user.email === email);
+      const usernameExists = existingUsers.some(user => user.userName === userName);
+
+      if (emailExists && usernameExists) {
+        return res.status(409).json({
+          success: false,
+          message: "Email and username already exist",
+        });
+      }
+
+      if (emailExists) {
+        return res.status(409).json({
+          success: false,
+          message: "Email already registered",
+        });
+      }
+
+      if (usernameExists) {
+        return res.status(409).json({
+          success: false,
+          message: "Username already taken",
+        });
+      }
     }
 
-    if (password !== conformPassword) {
-      return resp.json({
-        success: false,
-        message: "Passwords do not match",
-      });
-    }
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    if(userName.length < 3 || userName.length > 20) {
-      return resp.json({
-        success: false,
-        message: "Username must be between 3 and 20 characters",
-      });
-    }
-
-    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{6,}$/;
-    if (!passwordRegex.test(password)) {
-      return resp.json({
-        success: false,
-        message:
-          "Password must be at least 6 characters long and include 1 uppercase letter, 1 number, and 1 special character",
-      });
-    }
-
-    if (!/^\d{10}$/.test(phone)) {
-      return resp.json({
-        success: false,
-        message: "Phone number must be 10 digits",
-      });
-    }
-
-    db.query(
-      "SELECT * FROM users WHERE email = ? OR userName = ?",
-      [email, userName],
-      async (err, result) => {
-        if (err) {
-          return resp.json({ success: false, message: "DB connection error" });
-        }
-
-        if (result.length > 0) {
-          return resp.json({
-            success: false,
-            message: "UserName and Email already exists",
-          });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        db.query(
-          "INSERT INTO users (firstName, lastName, userName, password, phone, email) VALUES (?, ?, ?, ?, ?, ?)",
-          [firstName, lastName, userName, hashedPassword, phone, email],
-          (err, insertResult) => {
-            if (err) {
-              console.log("INSERT ERROR:", err);
-              return resp.json({
-                success: false,
-                message: "Insert failed",
-                error: err.sqlMessage,
-              });
-            }
-
-            return resp.json({
-              success: true,
-              message: "User registered successfully",
-              user: {
-                id: insertResult.insertId,
-                firstName,
-                lastName,
-                userName,
-                email,
-                phone,
-              },
-            });
-          },
-        );
-      },
+    const newUser = await insertUser(
+      firstName,
+      lastName,
+      userName,
+      hashedPassword,
+      email,
+      phone
     );
+
+    res.status(201).json({
+      success: true,
+      message: "User registered successfully",
+      user: newUser,
+    });
+
   } catch (error) {
-    resp.json({
+    console.error("registerUser error:", error);
+
+    res.status(500).json({
       success: false,
       message: "Server error",
     });
   }
 };
 
-export const updateUserProfile = (req, resp) => {
-  const userId = req.params.id
-  const { firstName, lastName, userName, phone, email } = req.body
+export const loginUser = async (req, res) => {
+  try {
+    const { userName, password } = req.body;
 
-  db.query(
-    "SELECT id FROM users WHERE (email = ? OR userName = ?) AND id != ?",
-    [email, userName, userId],
-    (err, result) => {
+    const user = await findUserByUsername(userName);
 
-      if (err) {
-        return resp.status(500).json({
-          success: false,
-          message: "DB connection error"
-        })
-      }
-
-      if (result.length > 0) {
-        return resp.status(409).json({
-          success: false,
-          message: "Email or Username already in use"
-        })
-      }
-
-      db.query(
-        "UPDATE users SET firstName=?, lastName=?, userName=?, phone=?, email=?, updatedAt=NOW() WHERE id=?",
-        [firstName, lastName, userName, phone, email, userId],
-        (err, updateResult) => {
-
-          if (err) {
-            return resp.status(500).json({
-              success: false,
-              message: "Update failed"
-            })
-          }
-
-          if (updateResult.affectedRows === 0) {
-            return resp.status(404).json({
-              success: false,
-              message: "User not found"
-            })
-          }
-
-          return resp.status(200).json({
-            success: true,
-            message: "User profile updated successfully"
-          })
-        }
-      )
-    }
-  )
-};
-
-export const userProfile = (req, resp) => {
-  const userId = req.params.id;
-
-  db.query(
-    "SELECT id, firstName, lastName, userName, email, phone FROM users WHERE id = ?",
-    [userId],
-    (err, result) => {
-      if (err) {
-        return resp
-          .status(500)
-          .json({ success: false, message: "DB connection error" });
-      }
-
-      if (result.length === 0) {
-        return resp
-          .status(404)
-          .json({ success: false, message: "User not found" });
-      }
-
-      resp.status(200).json({
-        success: true,
-        user: result[0],
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid username or password",
       });
-    },
-  );
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid username or password",
+      });
+    }
+
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    res.json({
+      success: true,
+      message: "Login successful",
+      token,
+      user: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        userName: user.userName,
+        email: user.email,
+        phone: user.phone,
+      },
+    });
+  } catch (error) {
+    console.error("loginUser error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
 };
 
-export const loginUser = (req, resp) => {
-  const { userName, password } = req.body;
+export const getUserProfile = async (req, res) => {
+  try {
+    const user = await findUserById(req.user.id);
 
-  db.query(
-    "SELECT * FROM users WHERE userName = ?",
-    [userName],
-    async (err, result) => {
-      if (err) {
-        return resp.json({ success: false, message: "DB connection error" });
-      }
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
-      if (result.length === 0) {
-        return resp.json({ success: false, message: "Username not valid" });
-      }
-
-      const user = result[0];
-
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
-        return resp.json({ success: false, message: "Incorrect password" });
-      } else {
-        const { id, firstName, lastName, email, phone } = user;
-        return resp.json({
-          success: true,
-          message: "Login successful",
-          user: {
-            id,
-            firstName,
-            lastName,
-            userName,
-            email,
-            phone,
-          },
-        });
-      }
-    },
-  );
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        userName: user.userName,
+        email: user.email,
+        phone: user.phone,
+      },
+    });
+  } catch (error) {
+    console.error("getUserProfile error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
 };

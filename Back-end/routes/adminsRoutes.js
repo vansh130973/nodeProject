@@ -1,11 +1,17 @@
-import express from "express"
-import { addAdmin, showAllUsers, showAllAdmins, loginAdmin } from "../controllers/adminsController.js"
+import express from "express";
+import { addAdmin, loginAdmin, showAllUsers, showAllAdmins } from "../controllers/adminsController.js";
+import { validate } from "../middlewares/validate.js";
+import { authenticate } from "../middlewares/authMiddleware.js";
+import { addAdminSchema, loginSchema } from "../validations/adminValidation.js";
 
-const router = express.Router()
+const router = express.Router();
 
-router.post("/add", addAdmin)
-router.post("/login", loginAdmin)
-router.get("/showAllUsers", showAllUsers)
-router.get("/showAllAdmins", showAllAdmins)
+router.post("/addAdmin", validate(addAdminSchema), addAdmin);
 
-export default router
+router.post("/login", validate(loginSchema), loginAdmin);
+
+router.get("/showAllUsers", authenticate, showAllUsers);
+
+router.get("/showAllAdmins", authenticate, showAllAdmins);
+
+export default router;
