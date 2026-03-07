@@ -46,7 +46,7 @@ export const findAdminByUsername = (userName) => {
 
 export const getAllUsers = () => {
   return new Promise((resolve, reject) => {
-    db.query("SELECT id, userName, email, phone FROM users", (err, result) => {
+    db.query("SELECT id,firstName, lastName, userName, email, phone FROM users", (err, result) => {
       if (err) return reject(err);
       resolve(result);
     });

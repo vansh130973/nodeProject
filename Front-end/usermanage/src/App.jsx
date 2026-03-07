@@ -1,35 +1,72 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-function App() {
-  const [count, setCount] = useState(0)
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AppNavbar from "./components/AppNavbar";
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import UserDashboard from "./pages/UserDashboard";
+import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminDashboard from "./pages/AdminDashboard";
 
-export default App
+// Layout wraps every page with the shared Navbar
+const Layout = ({ children }) => (
+  <>
+    <AppNavbar />
+    <main>{children}</main>
+  </>
+);
+
+const App = () => (
+  <AuthProvider>
+    <BrowserRouter>
+      {/* Single ToastContainer for the whole app */}
+      <ToastContainer
+        position="top-right"
+        autoClose={4000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
+
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login"       element={<Layout><LoginPage /></Layout>} />
+        <Route path="/register"    element={<Layout><RegisterPage /></Layout>} />
+        <Route path="/admin/login" element={<Layout><AdminLoginPage /></Layout>} />
+
+        {/* Protected user route */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute role="user" redirectTo="/login">
+              <Layout><UserDashboard /></Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Protected admin route */}
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute role="admin" redirectTo="/admin/login">
+              <Layout><AdminDashboard /></Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
+  </AuthProvider>
+);
+
+export default App;
