@@ -13,7 +13,7 @@ export const findAdminByEmailOrUsername = (email, userName) => {
   });
 };
 
-export const insertMasterAdmin = (userName, password, email, phone) => {
+export const insertAdmin = (userName, password, email, phone) => {
   return new Promise((resolve, reject) => {
     db.query(
       "INSERT INTO admins (userName, password, email, phone) VALUES (?, ?, ?, ?)",

@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import {
   findAdminByEmailOrUsername,
-  insertMasterAdmin,
+  insertAdmin,
   findAdminByUsername,
   getAllUsers,
   getAllAdmins,
@@ -22,7 +22,7 @@ export const addAdmin = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(String(password), 10);
 
-    const insertedAdmin = await insertMasterAdmin(
+    const insertedAdmin = await insertAdmin(
       userName,
       hashedPassword,
       email,
@@ -68,7 +68,7 @@ export const loginAdmin = async (req, res) => {
       });
     }
 
-    const token = jwt.sign({ id: admin.id }, process.env.JWT_SECRET, {
+    const token = jwt.sign({ id: admin.id, role: admin.role }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
@@ -81,6 +81,7 @@ export const loginAdmin = async (req, res) => {
         userName: admin.userName,
         email: admin.email,
         phone: admin.phone,
+        role: admin.role,
       },
     });
   } catch (error) {
