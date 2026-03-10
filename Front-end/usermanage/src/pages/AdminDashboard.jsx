@@ -1,5 +1,6 @@
+// pages/AdminDashboard.jsx
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../context/AuthContext";
 import { apiAddAdmin, apiGetAllUsers, apiGetAllAdmins, showApiError } from "../services/api";
@@ -15,34 +16,22 @@ const INITIAL_FORM = {
 
 const validateAdminForm = (form) => {
   const errors = {};
+  if (!form.userName.trim()) errors.userName = "Username is required";
+  else if (form.userName.length < 3) errors.userName = "Username must be at least 3 characters";
+  else if (form.userName.length > 20) errors.userName = "Username must not exceed 20 characters";
 
-  if (!form.userName.trim())
-    errors.userName = "Username is required";
-  else if (form.userName.length < 3)
-    errors.userName = "Username must be at least 3 characters";
-  else if (form.userName.length > 20)
-    errors.userName = "Username must not exceed 20 characters";
+  if (!form.email.trim()) errors.email = "Email is required";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = "Invalid email format";
 
-  if (!form.email.trim())
-    errors.email = "Email is required";
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-    errors.email = "Invalid email format";
+  if (!form.phone.trim()) errors.phone = "Phone number is required";
+  else if (!/^[0-9]{10}$/.test(form.phone)) errors.phone = "Phone number must be exactly 10 digits";
 
-  if (!form.phone.trim())
-    errors.phone = "Phone number is required";
-  else if (!/^[0-9]{10}$/.test(form.phone))
-    errors.phone = "Phone number must be exactly 10 digits";
-
-  if (!form.password)
-    errors.password = "Password is required";
+  if (!form.password) errors.password = "Password is required";
   else if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(form.password))
-    errors.password =
-      "Password must be 8+ characters with 1 uppercase, 1 number, and 1 special character (@$!%*?&)";
+    errors.password = "Password must be 8+ characters with 1 uppercase, 1 number, and 1 special character (@$!%*?&)";
 
-  if (!form.conformPassword)
-    errors.conformPassword = "Confirm password is required";
-  else if (form.password !== form.conformPassword)
-    errors.conformPassword = "Passwords do not match";
+  if (!form.conformPassword) errors.conformPassword = "Confirm password is required";
+  else if (form.password !== form.conformPassword) errors.conformPassword = "Passwords do not match";
 
   return errors;
 };
@@ -79,64 +68,93 @@ const DataTable = ({ columns, rows, emptyMsg }) => (
 );
 
 const AdminDashboard = () => {
-  const { admin } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
-  const [tab, setTab]                 = useState("dashboard");
-  const [users, setUsers]             = useState([]);
-  const [admins, setAdmins]           = useState([]);
+  // Derive active tab from current route
+  const getActiveTab = () => {
+    if (pathname === "/admin/dashboard") return "dashboard";
+    if (pathname === "/admin/users") return "users";
+    if (pathname === "/admin/admins") return "admins";
+    if (pathname === "/admin/add-admin") return "addAdmin";
+    return "dashboard"; // fallback
+  };
+  const activeTab = getActiveTab();
+
+  const [users, setUsers] = useState([]);
+  const [admins, setAdmins] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [form, setForm]               = useState(INITIAL_FORM);
-
+  const [form, setForm] = useState(INITIAL_FORM);
   const [formLoading, setFormLoading] = useState(false);
 
+  // Redirect if not admin
   useEffect(() => {
-    if (!admin) navigate("/admin/login");
-  }, [admin, navigate]);
+    if (!user || !(user.role === "ADMIN" || user.role === "MASTER_ADMIN")) {
+      navigate("/admin/login");
+    }
+  }, [user, navigate]);
 
+  // Initial data load – separate calls to avoid blocking users when admins fetch fails
   useEffect(() => {
-    if (!admin) return;
-    const loadAll = async () => {
+    if (!user) return;
+
+    const loadInitial = async () => {
+      // Always fetch users (allowed for both ADMIN and MASTER_ADMIN)
       try {
-        const [usersData, adminsData] = await Promise.all([
-          apiGetAllUsers(),
-          apiGetAllAdmins(),
-        ]);
+        const usersData = await apiGetAllUsers();
         setUsers(usersData.users);
-        setAdmins(adminsData.admins);
       } catch (err) {
         showApiError(err, (msg) => toast.error(msg));
       }
-    };
-    loadAll();
-  }, [admin]);
 
+      // Fetch admins only if MASTER_ADMIN
+      if (user.role === "MASTER_ADMIN") {
+        try {
+          const adminsData = await apiGetAllAdmins();
+          setAdmins(adminsData.admins);
+        } catch (err) {
+          showApiError(err, (msg) => toast.error(msg));
+        }
+      }
+    };
+
+    loadInitial();
+  }, [user]);
+
+  // Load data when activeTab changes (except dashboard and addAdmin)
   useEffect(() => {
-    if (tab === "dashboard" || tab === "addAdmin") return;
+    if (activeTab === "dashboard" || activeTab === "addAdmin") return;
+
     const load = async () => {
       setLoadingData(true);
       try {
-        if (tab === "users") {
+        if (activeTab === "users") {
           const data = await apiGetAllUsers();
           setUsers(data.users);
-        } else if (tab === "admins") {
+        } else if (activeTab === "admins") {
+          // Only MASTER_ADMIN should be able to load admins
+          if (user?.role !== "MASTER_ADMIN") {
+            throw new Error("Only Master Admin can see this!!!");
+          }
           const data = await apiGetAllAdmins();
           setAdmins(data.admins);
         }
       } catch (err) {
         showApiError(err, (msg) => toast.error(msg));
+        // Navigate back to dashboard on permission error
+        navigate("/admin/dashboard");
       } finally {
         setLoadingData(false);
       }
     };
     load();
-  }, [tab]);
+  }, [activeTab, user, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-
   };
 
   const handleAddAdmin = async (e) => {
@@ -159,6 +177,7 @@ const AdminDashboard = () => {
         autoClose: 3000,
       });
       setForm(INITIAL_FORM);
+      // Refresh admins list
       const data = await apiGetAllAdmins();
       setAdmins(data.admins);
     } catch (err) {
@@ -179,68 +198,62 @@ const AdminDashboard = () => {
         flexShrink: 0,
       }}
     >
-
       <nav className="flex-grow-1 py-2">
         <button
-          onClick={() => setTab("dashboard")}
+          onClick={() => navigate("/admin/dashboard")}
           className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-            ${tab === "dashboard" ? "bg-primary text-white fw-semibold" : "bg-transparent text-white-50"}`}
+            ${activeTab === "dashboard" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
           title={!sidebarOpen ? "Dashboard" : ""}
         >
           {sidebarOpen ? <span className="small">Dashboard</span> : "D"}
         </button>
 
         <button
-          onClick={() => setTab("users")}
+          onClick={() => navigate("/admin/users")}
           className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-            ${tab === "users" ? "bg-primary text-white fw-semibold" : "bg-transparent text-white-50"}`}
+            ${activeTab === "users" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
           title={!sidebarOpen ? "All Users" : ""}
         >
           {sidebarOpen ? <span className="small">All Users</span> : "U"}
         </button>
 
-        <button
-          onClick={() => setTab("admins")}
-          className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-            ${tab === "admins" ? "bg-primary text-white fw-semibold" : "bg-transparent text-white-50"}`}
-          title={!sidebarOpen ? "All Admins" : ""}
-        >
-          {sidebarOpen ? <span className="small">All Admins</span> : "A"}
-        </button>
+        {user?.role === "MASTER_ADMIN" && (
+          <button
+            onClick={() => navigate("/admin/admins")}
+            className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
+              ${activeTab === "admins" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
+            title={!sidebarOpen ? "All Admins" : ""}
+          >
+            {sidebarOpen ? <span className="small">All Admins</span> : "A"}
+          </button>
+        )}
 
-        <button
-          onClick={() => setTab("addAdmin")}
-          className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-            ${tab === "addAdmin" ? "bg-primary text-white fw-semibold" : "bg-transparent text-white-50"}`}
-          title={!sidebarOpen ? "Add Admin" : ""}
-        >
-          {sidebarOpen ? <span className="small">Add Admin</span> : "+"}
-        </button>
+        {user?.role === "MASTER_ADMIN" && (
+          <button
+            onClick={() => navigate("/admin/add-admin")}
+            className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
+              ${activeTab === "addAdmin" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
+            title={!sidebarOpen ? "Add Admin" : ""}
+          >
+            {sidebarOpen ? <span className="small">Add Admin</span> : "+"}
+          </button>
+        )}
       </nav>
-
-      {/* Admin info at bottom */}
-      {sidebarOpen && (
-        <div className="p-3 border-top border-secondary">
-          <p className="text-white-50 small mb-0">Logged in as</p>
-          <p className="text-white fw-semibold small mb-0 text-truncate">{admin?.userName}</p>
-        </div>
-      )}
     </div>
   );
 
   const renderContent = () => {
-    switch (tab) {
-
+    switch (activeTab) {
       case "dashboard":
         return (
           <>
-            <h5 className="fw-bold mb-4">Dashboard Overview</h5>
+            <h5 className="fw-bold mb-4">Dashboard</h5>
             <div className="row g-3 mb-4">
               <div className="col-sm-6 col-lg-4">
                 <div
                   className="card border-0 shadow-sm rounded-3 h-100"
-                  style={{ borderLeft: "4px solid #0d6efd", cursor: "pointer" }}
-                  onClick={() => setTab("users")}
+                  style={{ borderLeft: "4px solid #0d6efd" }}
+                  onClick={() => navigate("/admin/users")}
                 >
                   <div className="card-body d-flex align-items-center gap-3">
                     <div>
@@ -250,20 +263,22 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               </div>
-              <div className="col-sm-6 col-lg-4">
-                <div
-                  className="card border-0 shadow-sm rounded-3 h-100"
-                  style={{ borderLeft: "4px solid #ffc107", cursor: "pointer" }}
-                  onClick={() => setTab("admins")}
-                >
-                  <div className="card-body d-flex align-items-center gap-3">
-                    <div>
-                      <p className="text-muted small mb-1">Total Admins</p>
-                      <h3 className="fw-bold mb-0">{admins.length}</h3>
+              {user?.role === "MASTER_ADMIN" && (
+                <div className="col-sm-6 col-lg-4">
+                  <div
+                    className="card border-0 shadow-sm rounded-3 h-100"
+                    style={{ borderLeft: "4px solid rgba(255, 193, 7, 1)", cursor: "pointer" }}
+                    onClick={() => navigate("/admin/admins")}
+                  >
+                    <div className="card-body d-flex align-items-center gap-3">
+                      <div>
+                        <p className="text-muted small mb-1">Total Admins</p>
+                        <h3 className="fw-bold mb-0">{admins.length}</h3>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </>
         );
@@ -302,6 +317,11 @@ const AdminDashboard = () => {
         );
 
       case "admins":
+        if (user?.role !== "MASTER_ADMIN") {
+          // This should never happen because the route is protected, but just in case
+          navigate("/admin/dashboard");
+          return null;
+        }
         return (
           <>
             <h5 className="fw-bold mb-4">All Admins</h5>
@@ -319,7 +339,10 @@ const AdminDashboard = () => {
                   <DataTable
                     columns={["ID", "Username", "Email", "Phone"]}
                     rows={admins.map((a) => ({
-                      id: a.id, userName: a.userName, email: a.email, phone: a.phone,
+                      id: a.id,
+                      userName: a.userName,
+                      email: a.email,
+                      phone: a.phone,
                     }))}
                     emptyMsg="No admins found"
                   />
@@ -330,6 +353,10 @@ const AdminDashboard = () => {
         );
 
       case "addAdmin":
+        if (user?.role !== "MASTER_ADMIN") {
+          navigate("/admin/dashboard");
+          return null;
+        }
         return (
           <>
             <h5 className="fw-bold mb-4">Add New Admin</h5>

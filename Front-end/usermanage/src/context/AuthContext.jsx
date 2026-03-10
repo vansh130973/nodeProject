@@ -1,3 +1,4 @@
+// context/AuthContext.jsx
 import { createContext, useContext, useState, useCallback } from "react";
 
 const AuthContext = createContext(null);
@@ -7,40 +8,24 @@ export const AuthProvider = ({ children }) => {
     const saved = localStorage.getItem("user");
     return saved ? JSON.parse(saved) : null;
   });
+  const [token, setToken] = useState(() => localStorage.getItem("token"));
 
-  const [admin, setAdmin] = useState(() => {
-    const saved = localStorage.getItem("admin");
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  const loginUser = useCallback((userData, token) => {
-    localStorage.setItem("userToken", token);
+  const login = useCallback((userData, token) => {
+    localStorage.setItem("token", token);
     localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
+    setToken(token);
   }, []);
 
-  const loginAdmin = useCallback((adminData, token) => {
-    localStorage.setItem("adminToken", token);
-    localStorage.setItem("admin", JSON.stringify(adminData));
-    setAdmin(adminData);
-  }, []);
-
-  const logoutUser = useCallback(() => {
-    localStorage.removeItem("userToken");
+  const logout = useCallback(() => {
+    localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);
-  }, []);
-
-  const logoutAdmin = useCallback(() => {
-    localStorage.removeItem("adminToken");
-    localStorage.removeItem("admin");
-    setAdmin(null);
+    setToken(null);
   }, []);
 
   return (
-    <AuthContext.Provider
-      value={{ user, admin, loginUser, loginAdmin, logoutUser, logoutAdmin }}
-    >
+    <AuthContext.Provider value={{ user, token, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

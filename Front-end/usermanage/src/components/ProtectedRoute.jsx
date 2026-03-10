@@ -1,15 +1,21 @@
+// components/ProtectedRoute.jsx
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-// Wraps a route and redirects if the required session is missing.
-// Usage:
-//   <ProtectedRoute role="user"  redirectTo="/login">
-//   <ProtectedRoute role="admin" redirectTo="/admin/login">
+const ProtectedRoute = ({ children, allowedRoles = [] }) => {
+  const { user, token } = useAuth();
 
-const ProtectedRoute = ({ children, role = "user", redirectTo = "/login" }) => {
-  const { user, admin } = useAuth();
-  const isAllowed = role === "admin" ? !!admin : !!user;
-  return isAllowed ? children : <Navigate to={redirectTo} replace />;
+  if (!token || !user) {
+    // Not logged in – redirect to login
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    // Logged in but insufficient role
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  return children;
 };
 
 export default ProtectedRoute;

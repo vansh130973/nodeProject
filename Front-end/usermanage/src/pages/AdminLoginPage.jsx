@@ -1,3 +1,4 @@
+// pages/AdminLoginPage.jsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -13,7 +14,7 @@ const validateForm = (form) => {
 };
 
 const AdminLoginPage = () => {
-  const { loginAdmin } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ userName: "", password: "" });
@@ -35,7 +36,8 @@ const AdminLoginPage = () => {
     const toastId = toast.loading("Signing in as admin...");
     try {
       const data = await apiLoginAdmin(form);
-      loginAdmin(data.admin, data.token);
+      // data.admin already contains role from backend
+      login(data.admin, data.token);
       toast.update(toastId, {
         render: `Welcome, Admin ${data.admin.userName}!`,
         type: "success",

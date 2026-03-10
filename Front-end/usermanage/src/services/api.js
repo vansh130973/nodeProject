@@ -1,8 +1,9 @@
+// services/api.js
 const BASE_URL = "http://localhost:3200";
 
-const getHeaders = (token) => ({
+const getHeaders = () => ({
   "Content-Type": "application/json",
-  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
 
 const handleResponse = async (res) => {
@@ -23,45 +24,41 @@ export const showApiError = (err, toastFn) => {
   }
 };
 
+// Public endpoints
 export const apiRegisterUser = (body) =>
   fetch(`${BASE_URL}/register`, {
     method: "POST",
-    headers: getHeaders(),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   }).then(handleResponse);
 
 export const apiLoginUser = (body) =>
   fetch(`${BASE_URL}/login`, {
     method: "POST",
-    headers: getHeaders(),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  }).then(handleResponse);
-
-export const apiGetUserProfile = () =>
-  fetch(`${BASE_URL}/profile`, {
-    headers: getHeaders(localStorage.getItem("userToken")),
   }).then(handleResponse);
 
 export const apiLoginAdmin = (body) =>
   fetch(`${BASE_URL}/admin/login`, {
     method: "POST",
-    headers: getHeaders(),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   }).then(handleResponse);
+
+// Protected endpoints (token required)
+export const apiGetUserProfile = () =>
+  fetch(`${BASE_URL}/profile`, { headers: getHeaders() }).then(handleResponse);
 
 export const apiAddAdmin = (body) =>
   fetch(`${BASE_URL}/admin/addAdmin`, {
     method: "POST",
-    headers: getHeaders(localStorage.getItem("adminToken")),
+    headers: getHeaders(),
     body: JSON.stringify(body),
   }).then(handleResponse);
 
 export const apiGetAllUsers = () =>
-  fetch(`${BASE_URL}/admin/showAllUsers`, {
-    headers: getHeaders(localStorage.getItem("adminToken")),
-  }).then(handleResponse);
+  fetch(`${BASE_URL}/admin/showAllUsers`, { headers: getHeaders() }).then(handleResponse);
 
 export const apiGetAllAdmins = () =>
-  fetch(`${BASE_URL}/admin/showAllAdmins`, {
-    headers: getHeaders(localStorage.getItem("adminToken")),
-  }).then(handleResponse);
+  fetch(`${BASE_URL}/admin/showAllAdmins`, { headers: getHeaders() }).then(handleResponse);

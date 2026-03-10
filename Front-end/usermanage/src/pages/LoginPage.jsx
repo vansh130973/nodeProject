@@ -1,3 +1,4 @@
+// pages/LoginPage.jsx
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -5,7 +6,6 @@ import { useAuth } from "../context/AuthContext";
 import { apiLoginUser, showApiError } from "../services/api";
 import InputField from "../components/InputField";
 
-// Validate before hitting the API
 const validateLoginForm = (form) => {
   const errors = {};
   if (!form.userName.trim()) errors.userName = "Username is required";
@@ -14,7 +14,7 @@ const validateLoginForm = (form) => {
 };
 
 const LoginPage = () => {
-  const { loginUser } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ userName: "", password: "" });
@@ -26,7 +26,6 @@ const LoginPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Client-side validation — no API call if fields are empty
     const errors = validateLoginForm(form);
     if (Object.keys(errors).length > 0) {
       Object.values(errors).forEach((msg) => toast.error(msg));
@@ -37,7 +36,9 @@ const LoginPage = () => {
     const toastId = toast.loading("Signing in...");
     try {
       const data = await apiLoginUser(form);
-      loginUser(data.user, data.token);
+      // Add default role for regular users
+      const userWithRole = { ...data.user, role: "USER" };
+      login(userWithRole, data.token);
       toast.update(toastId, {
         render: `Welcome back, ${data.user.userName}!`,
         type: "success",
@@ -60,7 +61,7 @@ const LoginPage = () => {
         style={{ width: "100%", maxWidth: 420 }}
       >
         <div className="card-body">
-          <h4 className="fw-bold mb-3">Login</h4>
+          <h4 className="fw-bold mb-3">User Login</h4>
 
           <form onSubmit={handleSubmit} noValidate>
             <InputField
