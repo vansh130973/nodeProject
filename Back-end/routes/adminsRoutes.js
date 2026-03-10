@@ -6,7 +6,7 @@ import { addAdminSchema, loginSchema } from "../validations/adminValidation.js";
 
 const router = express.Router();
 
-router.post("/addAdmin", roleCheck("MASTER_ADMIN"), validate(addAdminSchema), addAdmin);
+router.post("/addAdmin", authenticate, roleCheck("MASTER_ADMIN"), validate(addAdminSchema), addAdmin);
 
 router.post("/login", validate(loginSchema), loginAdmin);
 
