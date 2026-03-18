@@ -1,17 +1,24 @@
-// components/AppNavbar.jsx
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { apiLogoutUser, apiLogoutAdmin } from "../services/api";
 
 const AppNavbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
-
   const isAdmin = user?.role === "ADMIN" || user?.role === "MASTER_ADMIN";
+
+  const handleLogout = async () => {
+    try {
+      if (isAdmin) {
+        await apiLogoutAdmin();
+      } else {
+        await apiLogoutUser();
+      }
+    } catch (_) {}
+    logout();
+    navigate(isAdmin ? "/admin/login" : "/login");
+  };
 
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-dark px-4 shadow-sm">

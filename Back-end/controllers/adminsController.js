@@ -6,6 +6,8 @@ import {
   findAdminByUsername,
   getAllUsers,
   getAllAdmins,
+  saveAdminToken,
+  deleteAdminToken,
 } from "../services/adminService.js";
 import { sendSuccessResponse, sendErrorResponse, adminData } from "../utils/response.js";
 
@@ -14,21 +16,15 @@ export const addAdmin = async (req, res) => {
     const { userName, password, phone, email } = req.body;
 
     const existingAdmin = await findAdminByEmailOrUsername(email, userName);
-    if (existingAdmin.length > 0) {
+    if (existingAdmin.length > 0)
       return sendErrorResponse(res, "Username or email already exists");
-    }
 
     const hashedPassword = await bcrypt.hash(String(password), 10);
+    const insertedAdmin = await insertAdmin(userName, hashedPassword, email, phone);
 
-    const insertedAdmin = await insertAdmin(
-      userName,
-      hashedPassword,
-      email,
-      phone,
-    );
-
-    return sendSuccessResponse( res, "Admin registered successfully", { admin: adminData(insertedAdmin) }, null);
+    return sendSuccessResponse(res, "Admin registered successfully", { admin: adminData(insertedAdmin) });
   } catch (error) {
+    console.error("addAdmin error:", error);
     return sendErrorResponse(res, "Server error");
   }
 };
@@ -38,31 +34,28 @@ export const loginAdmin = async (req, res) => {
     const { userName, password } = req.body;
 
     const admin = await findAdminByUsername(userName);
+    if (!admin) return sendErrorResponse(res, "Invalid username");
 
-    if (!admin) {
-      return sendErrorResponse(res, "Invalid username");
-    }
+    const isMatch = await bcrypt.compare(String(password), admin.password);
+    if (!isMatch) return sendErrorResponse(res, "Invalid password");
 
-    const isPasswordValid = await bcrypt.compare(
-      String(password),
-      admin.password,
-    );
+    const token = jwt.sign(adminData(admin), process.env.JWT_SECRET, { expiresIn: "1h" });
 
-    if (!isPasswordValid) {
-      return sendErrorResponse(res, "Invalid password");
-    }
-
-    const token = jwt.sign({ 
-      id: admin.id,
-      userName: admin.userName,
-      email: admin.email,
-      phone: admin.phone,
-      role: admin.role      
-    }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    await saveAdminToken(admin.id, token);
 
     return sendSuccessResponse(res, "Login successful", null, token);
   } catch (error) {
     console.error("loginAdmin error:", error);
+    return sendErrorResponse(res, "Server error");
+  }
+};
+
+export const logoutAdmin = async (req, res) => {
+  try {
+    await deleteAdminToken(req.token);
+    return sendSuccessResponse(res, "Logged out successfully");
+  } catch (error) {
+    console.error("logoutAdmin error:", error);
     return sendErrorResponse(res, "Server error");
   }
 };

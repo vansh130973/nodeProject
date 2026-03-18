@@ -1,25 +1,33 @@
-// context/AuthContext.jsx
 import { createContext, useContext, useState, useCallback } from "react";
 
 const AuthContext = createContext(null);
 
+const decodeToken = (token) => {
+  try {
+    return JSON.parse(atob(token.split(".")[1]));
+  } catch {
+    return null;
+  }
+};
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem("user");
-    return saved ? JSON.parse(saved) : null;
-  });
   const [token, setToken] = useState(() => localStorage.getItem("token"));
 
-  const login = useCallback((userData, token) => {
+  const [user, setUser] = useState(() => {
+    const savedToken = localStorage.getItem("token");
+    return savedToken ? decodeToken(savedToken) : null;
+  });
+
+  const login = useCallback((token) => {
     localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(userData));
-    setUser(userData);
+    localStorage.removeItem("user");
+    const decoded = decodeToken(token);
     setToken(token);
+    setUser(decoded);
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem("token");
-    localStorage.removeItem("user");
     setUser(null);
     setToken(null);
   }, []);

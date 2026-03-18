@@ -1,17 +1,9 @@
 export const sendSuccessResponse = (res, message, data = {}, token = null) => {
-  return res.json({
-    success: true,
-    message,
-    token,
-    ...data,
-  });
+  return res.json({ success: true, message, token, ...data });
 };
 
-export const sendErrorResponse = (res, message, statusCode = 500) => {
-  return res.status(statusCode).json({
-    success: false,
-    message,
-  });
+export const sendErrorResponse = (res, message, statusCode = 400) => {
+  return res.status(statusCode).json({ success: false, message });
 };
 
 export const userData = (user) => ({
@@ -21,6 +13,9 @@ export const userData = (user) => ({
   userName: user.userName,
   email: user.email,
   phone: user.phone,
+  gender: user.gender ?? null,
+  profilePicture: user.profilePicture ?? null,
+  role: "USER",
 });
 
 export const adminData = (admin) => ({

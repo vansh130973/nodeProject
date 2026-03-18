@@ -1,52 +1,447 @@
-// pages/UserDashboard.jsx
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { toast } from "react-toastify";
 import { useAuth } from "../context/AuthContext";
+import {
+  apiGetUserProfile,
+  apiUpdateUserProfile,
+  apiChangePassword,
+  apiLogoutUser,
+  showApiError,
+} from "../services/api";
+import InputField from "../components/InputField";
+
+const BASE_URL = "http://localhost:3200";
 
 const UserDashboard = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  const getActiveTab = () => {
+    if (pathname === "/dashboard") return "profile";
+    if (pathname === "/edit-profile") return "edit";
+    if (pathname === "/change-password") return "password";
+    return "profile";
+  };
+  const activeTab = getActiveTab();
+
+  const [profile, setProfile] = useState(null);
+
+  const [editForm, setEditForm] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    gender: "",
+  });
+  const [newImage, setNewImage] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [editLoading, setEditLoading] = useState(false);
+
+  const [pwForm, setPwForm] = useState({
+    newPassword: "",
+    confirmNewPassword: "",
+  });
+  const [pwLoading, setPwLoading] = useState(false);
 
   useEffect(() => {
-    if (!user) navigate("/login");
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    apiGetUserProfile()
+      .then((res) => {
+        setProfile(res.data);
+        setEditForm({
+          firstName: res.data.firstName,
+          lastName: res.data.lastName,
+          phone: res.data.phone,
+          gender: res.data.gender ?? "",
+        });
+      })
+      .catch(() => toast.error("Failed to load profile"));
   }, [user, navigate]);
 
-  const profileFields = [
-    ["First Name", user?.firstName],
-    ["Last Name", user?.lastName],
-    ["Username", user?.userName],
-    ["Email", user?.email],
-    ["Phone", user?.phone],
-  ];
+  const handleEditChange = (e) =>
+    setEditForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  return (
-    <div className="min-vh-100 bg-light">
-      <div className="container py-5">
-        <div className="row justify-content-center">
-          <div className="col-md-6">
+  const handlePwChange = (e) =>
+    setPwForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setNewImage(file);
+      setPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editForm.firstName.trim() || !editForm.lastName.trim())
+      return toast.error("First and Last name are required");
+    if (!/^[0-9]{10}$/.test(editForm.phone))
+      return toast.error("Phone must be exactly 10 digits");
+    if (!editForm.gender) return toast.error("Gender is required");
+
+    const formData = new FormData();
+    formData.append("firstName", editForm.firstName);
+    formData.append("lastName", editForm.lastName);
+    formData.append("phone", editForm.phone);
+    formData.append("gender", editForm.gender);
+    if (newImage) {
+      formData.append("profilePicture", newImage);
+    } else if (profile.profilePicture) {
+      formData.append("profilePicture", profile.profilePicture);
+    }
+
+    setEditLoading(true);
+    try {
+      const res = await apiUpdateUserProfile(formData);
+      setProfile(res.data);
+      setPreview(null);
+      setNewImage(null);
+      toast.success("Profile updated successfully");
+      navigate("/dashboard");
+    } catch (err) {
+      showApiError(err, (msg) => toast.error(msg));
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handlePwSubmit = async (e) => {
+    e.preventDefault();
+    if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(pwForm.newPassword))
+      return toast.error(
+        "Password must be 8+ chars with uppercase, number and special char",
+      );
+    if (pwForm.newPassword !== pwForm.confirmNewPassword)
+      return toast.error("Passwords do not match");
+
+    setPwLoading(true);
+    try {
+      await apiChangePassword(pwForm);
+      toast.success("Password changed! Please login again.");
+      await apiLogoutUser().catch(() => {});
+      logout();
+      navigate("/login");
+    } catch (err) {
+      showApiError(err, (msg) => toast.error(msg));
+    } finally {
+      setPwLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await apiLogoutUser();
+    } catch (_) {}
+    logout();
+    navigate("/login");
+  };
+
+  const imgSrc = preview
+    ? preview
+    : profile?.profilePicture
+      ? `${BASE_URL}/${profile.profilePicture}`
+      : null;
+
+  const Sidebar = () => (
+    <div
+      className="d-flex flex-column bg-dark text-white"
+      style={{ width: 240, minHeight: "calc(100vh - 56px)", flexShrink: 0 }}
+    >
+      <nav className="flex-grow-1 py-2">
+        <button
+          onClick={() => navigate("/dashboard")}
+          className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
+            ${activeTab === "profile" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
+        >
+          <span className="small">Profile</span>
+        </button>
+
+        <button
+          onClick={() => navigate("/edit-profile")}
+          className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
+            ${activeTab === "edit" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
+        >
+          <span className="small">Edit Profile</span>
+        </button>
+
+        <button
+          onClick={() => navigate("/change-password")}
+          className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
+            ${activeTab === "password" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
+        >
+          <span className="small">Change Password</span>
+        </button>
+
+        <button
+          onClick={handleLogout}
+          className="d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start bg-transparent text-danger"
+        >
+          <span className="small">Logout</span>
+        </button>
+      </nav>
+    </div>
+  );
+
+  const renderContent = () => {
+    if (!profile) {
+      return (
+        <div className="d-flex align-items-center justify-content-center h-100">
+          <div className="spinner-border text-warning" />
+        </div>
+      );
+    }
+
+    switch (activeTab) {
+      case "profile":
+        return (
+          <>
+            <h5 className="fw-bold mb-4">Profile</h5>
             <div className="card border-0 shadow-sm rounded-3">
-              <div className="card-header bg-white border-bottom fw-semibold">
-                Your Profile
-              </div>
               <div className="card-body">
-                <dl className="row mb-0">
-                  {profileFields.map(([label, value]) => (
-                    <>
-                      <div key={label} className="row">
-                        <dt key={label + "-label"} className="col-5 text-muted fw-normal small">
-                          {label}
-                        </dt>
-                        <dd key={label + "-value"} className="col-7 fw-semibold">
-                          {value ?? "—"}
-                        </dd>
+                <div className="d-flex align-items-center gap-4 mb-4 pb-3 border-bottom">
+                  <div
+                    className="rounded-circle overflow-hidden border flex-shrink-0"
+                    style={{ width: 80, height: 80, background: "#f0f0f0" }}
+                  >
+                    {imgSrc ? (
+                      <img
+                        src={imgSrc}
+                        alt="profile"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      <div
+                        className="d-flex align-items-center justify-content-center h-100 text-muted"
+                        style={{ fontSize: 32 }}
+                      >
+                        👤
                       </div>
-                    </>
+                    )}
+                  </div>
+                  <div>
+                    <h5 className="fw-bold mb-0">
+                      {profile.firstName} {profile.lastName}
+                    </h5>
+                    <small className="text-muted">@{profile.userName}</small>
+                  </div>
+                </div>
+
+                {/* Fields */}
+                <dl className="row mb-0">
+                  {[
+                    ["First Name", profile.firstName],
+                    ["Last Name", profile.lastName],
+                    ["Username", profile.userName],
+                    ["Email", profile.email],
+                    ["Phone", profile.phone],
+                    ["Gender", profile.gender ?? "—"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="row mb-3">
+                      <dt className="col-4 text-muted fw-normal small">
+                        {label}
+                      </dt>
+                      <dd className="col-8 fw-semibold mb-0">{value}</dd>
+                    </div>
                   ))}
                 </dl>
               </div>
             </div>
-          </div>
-        </div>
+          </>
+        );
+
+      case "edit":
+        return (
+          <>
+            <h5 className="fw-bold mb-4">Edit Profile</h5>
+            <div className="row justify-content-center">
+              <div className="col-md-8 col-lg-6">
+                <div className="card border-0 shadow-sm rounded-3">
+                  <div className="card-body p-4">
+                    <form onSubmit={handleEditSubmit} noValidate>
+                      <div className="mb-4 text-center">
+                        <div
+                          className="rounded-circle overflow-hidden mx-auto mb-3 border"
+                          style={{
+                            width: 100,
+                            height: 100,
+                            background: "#f0f0f0",
+                          }}
+                        >
+                          {imgSrc ? (
+                            <img
+                              src={imgSrc}
+                              alt="preview"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              className="d-flex align-items-center justify-content-center h-100 text-muted"
+                              style={{ fontSize: 36 }}
+                            >
+                              👤
+                            </div>
+                          )}
+                        </div>
+                        <label className="btn btn-sm btn-outline-secondary px-3">
+                          Change Photo
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            hidden
+                            onChange={handleImageChange}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="row">
+                        <div className="col-6">
+                          <InputField
+                            label="First Name"
+                            id="firstName"
+                            name="firstName"
+                            type="text"
+                            value={editForm.firstName}
+                            onChange={handleEditChange}
+                            autocomplete="firstName"
+                          />
+                        </div>
+                        <div className="col-6">
+                          <InputField
+                            label="Last Name"
+                            id="lastName"
+                            name="lastName"
+                            type="text"
+                            value={editForm.lastName}
+                            onChange={handleEditChange}
+                            autocomplete="lastName"
+                          />
+                        </div>
+                      </div>
+
+                      <InputField
+                        label="Phone"
+                        id="phone"
+                        name="phone"
+                        type="tel"
+                        value={editForm.phone}
+                        onChange={handleEditChange}
+                        autocomplete="phone"
+                      />
+
+                      <div className="mb-4">
+                        <label className="form-label fw-semibold">Gender</label>
+                        <select
+                          name="gender"
+                          className="form-select form-select-md"
+                          value={editForm.gender}
+                          onChange={handleEditChange}
+                        >
+                          <option value="">Select Gender</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={editLoading}
+                        className="btn btn-warning w-100 py-2 fw-semibold"
+                      >
+                        {editLoading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" />
+                            Saving...
+                          </>
+                        ) : (
+                          "Save Changes"
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        );
+
+      case "password":
+        return (
+          <>
+            <h5 className="fw-bold mb-4">Change Password</h5>
+            <div className="row justify-content-center">
+              <div className="col-md-8 col-lg-6">
+                <div className="card border-0 shadow-sm rounded-3">
+                  <div className="card-body p-4">
+                    <form onSubmit={handlePwSubmit} noValidate>
+                      <InputField
+                        label="New Password"
+                        id="newPassword"
+                        name="newPassword"
+                        type="password"
+                        placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
+                        value={pwForm.newPassword}
+                        onChange={handlePwChange}
+                        autocomplete="newPassword"
+                      />
+
+                      <div className="mb-4">
+                        <InputField
+                          label="Confirm New Password"
+                          id="confirmNewPassword"
+                          name="confirmNewPassword"
+                          type="password"
+                          placeholder="Repeat new password"
+                          value={pwForm.confirmNewPassword}
+                          onChange={handlePwChange}
+                          autocomplete="confirmNewPassword"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={pwLoading}
+                        className="btn btn-danger w-100 py-2 fw-semibold"
+                      >
+                        {pwLoading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" />
+                            Changing...
+                          </>
+                        ) : (
+                          "Change Password"
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="d-flex" style={{ minHeight: "calc(100vh - 56px)" }}>
+      <Sidebar />
+      <div className="flex-grow-1 p-4 bg-light overflow-auto">
+        {renderContent()}
       </div>
     </div>
   );

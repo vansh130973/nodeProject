@@ -2,18 +2,30 @@ import express from "express";
 import {
   registerUser,
   loginUser,
+  logoutUser,
+  getDashboard,
   getUserProfile,
+  updateProfile,
+  changePassword,
 } from "../controllers/usersController.js";
 import { validate } from "../middlewares/validate.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
-import { addUserSchema, loginUserSchema } from "../validations/userValidation.js";
+import {
+  addUserSchema,
+  loginUserSchema,
+  updateProfileSchema,
+  changePasswordSchema,
+} from "../validations/userValidation.js";
+import upload from "../middlewares/upload.js";
 
 const router = express.Router();
 
-router.post("/register", validate(addUserSchema), registerUser);
-
+router.post("/register", upload.single("profilePicture"), validate(addUserSchema), registerUser);
 router.post("/login", validate(loginUserSchema), loginUser);
-
+router.post("/logout", authenticate, logoutUser);
+router.get("/dashboard", authenticate, getDashboard);
 router.get("/profile", authenticate, getUserProfile);
+router.put("/profile", authenticate, upload.single("profilePicture"), validate(updateProfileSchema), updateProfile);
+router.post("/changePassword", authenticate, validate(changePasswordSchema), changePassword);
 
 export default router;

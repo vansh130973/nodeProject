@@ -1,4 +1,3 @@
-// services/api.js
 const BASE_URL = "http://localhost:3200";
 
 const getHeaders = () => ({
@@ -24,12 +23,10 @@ export const showApiError = (err, toastFn) => {
   }
 };
 
-// Public endpoints
-export const apiRegisterUser = (body) =>
+export const apiRegisterUser = (formData) =>
   fetch(`${BASE_URL}/register`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: formData,
   }).then(handleResponse);
 
 export const apiLoginUser = (body) =>
@@ -46,9 +43,30 @@ export const apiLoginAdmin = (body) =>
     body: JSON.stringify(body),
   }).then(handleResponse);
 
-// Protected endpoints (token required)
+export const apiLogoutUser = () =>
+  fetch(`${BASE_URL}/logout`, {
+    method: "POST",
+    headers: getHeaders(),
+  }).then(handleResponse);
+
 export const apiGetUserProfile = () =>
-  fetch(`${BASE_URL}/profile`, { headers: getHeaders() }).then(handleResponse);
+  fetch(`${BASE_URL}/profile`, {
+    headers: getHeaders(),
+  }).then(handleResponse);
+
+export const apiUpdateUserProfile = (formData) =>
+  fetch(`${BASE_URL}/profile`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    body: formData,
+  }).then(handleResponse);
+
+export const apiChangePassword = (body) =>
+  fetch(`${BASE_URL}/changePassword`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(body),
+  }).then(handleResponse);
 
 export const apiAddAdmin = (body) =>
   fetch(`${BASE_URL}/admin/addAdmin`, {
@@ -58,7 +76,17 @@ export const apiAddAdmin = (body) =>
   }).then(handleResponse);
 
 export const apiGetAllUsers = () =>
-  fetch(`${BASE_URL}/admin/showAllUsers`, { headers: getHeaders() }).then(handleResponse);
+  fetch(`${BASE_URL}/admin/showAllUsers`, {
+    headers: getHeaders(),
+  }).then(handleResponse);
 
 export const apiGetAllAdmins = () =>
-  fetch(`${BASE_URL}/admin/showAllAdmins`, { headers: getHeaders() }).then(handleResponse);
+  fetch(`${BASE_URL}/admin/showAllAdmins`, {
+    headers: getHeaders(),
+  }).then(handleResponse);
+
+export const apiLogoutAdmin = () =>
+  fetch(`${BASE_URL}/admin/logout`, {
+    method: "POST",
+    headers: getHeaders(),
+  }).then(handleResponse);

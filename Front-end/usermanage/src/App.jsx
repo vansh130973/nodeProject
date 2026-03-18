@@ -13,12 +13,17 @@ import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import Unauthorized from "./pages/Unauthorized";
 
-// Layout wraps every page with the shared Navbar
 const Layout = ({ children }) => (
   <>
     <AppNavbar />
     <main>{children}</main>
   </>
+);
+
+const UserRoute = ({ children }) => (
+  <ProtectedRoute allowedRoles={["USER"]}>
+    <Layout>{children}</Layout>
+  </ProtectedRoute>
 );
 
 const App = () => (
@@ -37,57 +42,36 @@ const App = () => (
       />
 
       <Routes>
-        {/* Public routes */}
-        <Route path="/login"       element={<Layout><LoginPage /></Layout>} />
-        <Route path="/register"    element={<Layout><RegisterPage /></Layout>} />
+        <Route path="/login" element={<Layout><LoginPage /></Layout>} />
+        <Route path="/register" element={<Layout><RegisterPage /></Layout>} />
         <Route path="/admin/login" element={<Layout><AdminLoginPage /></Layout>} />
         <Route path="/unauthorized" element={<Layout><Unauthorized /></Layout>} />
 
-        {/* Protected user route */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute allowedRoles={["USER"]}>
-              <Layout><UserDashboard /></Layout>
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/dashboard" element={<UserRoute><UserDashboard /></UserRoute>} />
+        <Route path="/edit-profile" element={<UserRoute><UserDashboard /></UserRoute>} />
+        <Route path="/change-password" element={<UserRoute><UserDashboard /></UserRoute>} />
 
-        {/* Protected admin routes */}
-        <Route
-          path="/admin/dashboard"
-          element={
-            <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
-              <Layout><AdminDashboard /></Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/users"
-          element={
-            <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
-              <Layout><AdminDashboard /></Layout>  {/* AdminDashboard handles tabs */}
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/admins"
-          element={
-            <ProtectedRoute allowedRoles={["MASTER_ADMIN"]}>
-              <Layout><AdminDashboard /></Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/add-admin"
-          element={
-            <ProtectedRoute allowedRoles={["MASTER_ADMIN"]}>
-              <Layout><AdminDashboard /></Layout>
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/admin/dashboard" element={
+          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
+            <Layout><AdminDashboard /></Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/users" element={
+          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
+            <Layout><AdminDashboard /></Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/admins" element={
+          <ProtectedRoute allowedRoles={["MASTER_ADMIN"]}>
+            <Layout><AdminDashboard /></Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/add-admin" element={
+          <ProtectedRoute allowedRoles={["MASTER_ADMIN"]}>
+            <Layout><AdminDashboard /></Layout>
+          </ProtectedRoute>
+        } />
 
-        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
