@@ -1,64 +1,64 @@
 import db from "../config/db.js";
 
-export const findUserByEmailOrUsername = (email, userName) => {
-  return new Promise((resolve, reject) => {
-    db.query(
+export const findUserByEmailOrUsername = async (email, userName) => {
+  try {
+    const [result] = await db.query(
       "SELECT * FROM users WHERE email = ? OR userName = ?",
-      [email, userName],
-      (err, result) => {
-        if (err) return reject(err);
-        resolve(result);
-      },
+      [email, userName]
     );
-  });
+    return result;
+  } catch (err) {
+    throw err;
+  }
 };
 
-export const findUserByUsername = (userName) => {
-  return new Promise((resolve, reject) => {
-    db.query(
+export const findUserByUsername = async (userName) => {
+  try {
+    const [result] = await db.query(
       "SELECT * FROM users WHERE userName = ?",
-      [userName],
-      (err, result) => {
-        if (err) return reject(err);
-        resolve(result[0] ?? null);
-      },
+      [userName]
     );
-  });
+    return result[0] ?? null;
+  } catch (err) {
+    throw err;
+  }
 };
 
-export const findUserById = (id) => {
-  return new Promise((resolve, reject) => {
-    db.query("SELECT * FROM users WHERE id = ?", [id], (err, result) => {
-      if (err) return reject(err);
-      resolve(result[0] ?? null);
-    });
-  });
+export const findUserById = async (id) => {
+  try {
+    const [result] = await db.query(
+      "SELECT * FROM users WHERE id = ?",
+      [id]
+    );
+    return result[0] ?? null;
+  } catch (err) {
+    throw err;
+  }
 };
 
-export const insertUser = (
+export const insertUser = async (
   firstName,
   lastName,
   userName,
   password,
   email,
-  phone,
+  phone
 ) => {
-  return new Promise((resolve, reject) => {
-    db.query(
+  try {
+    const [result] = await db.query(
       "INSERT INTO users (firstName, lastName, userName, password, email, phone) VALUES (?, ?, ?, ?, ?, ?)",
-      [firstName, lastName, userName, password, email, phone],
-      (err, result) => {
-        if (err) return reject(err);
-
-        resolve({
-          id: result.insertId,
-          firstName,
-          lastName,
-          userName,
-          email,
-          phone,
-        });
-      },
+      [firstName, lastName, userName, password, email, phone]
     );
-  });
+
+    return {
+      id: result.insertId,
+      firstName,
+      lastName,
+      userName,
+      email,
+      phone,
+    };
+  } catch (err) {
+    throw err;
+  }
 };

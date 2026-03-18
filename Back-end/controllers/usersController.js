@@ -6,6 +6,7 @@ import {
   findUserByUsername,
   findUserById,
 } from "../services/userService.js";
+import { sendSuccessResponse, sendErrorResponse, userData } from "../utils/response.js";
 
 export const registerUser = async (req, res) => {
   try {
@@ -14,29 +15,15 @@ export const registerUser = async (req, res) => {
     const existingUsers = await findUserByEmailOrUsername(email, userName);
 
     if (existingUsers.length > 0) {
-
       const emailExists = existingUsers.some(user => user.email === email);
       const usernameExists = existingUsers.some(user => user.userName === userName);
 
-      if (emailExists && usernameExists) {
-        return res.status(409).json({
-          success: false,
-          message: "Email and username already exist",
-        });
-      }
-
       if (emailExists) {
-        return res.status(409).json({
-          success: false,
-          message: "Email already registered",
-        });
+        return sendErrorResponse(res, "Email already registered");
       }
 
       if (usernameExists) {
-        return res.status(409).json({
-          success: false,
-          message: "Username already taken",
-        });
+        return sendErrorResponse(res, "Username already taken");
       }
     }
 
@@ -51,19 +38,11 @@ export const registerUser = async (req, res) => {
       phone
     );
 
-    res.status(201).json({
-      success: true,
-      message: "User registered successfully",
-      user: newUser,
-    });
+    return sendSuccessResponse( res, "User registered successfully", null, jwt.sign(userData(newUser), process.env.JWT_SECRET, { expiresIn: "1h" }));
 
   } catch (error) {
     console.error("registerUser error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    return sendErrorResponse(res, "Server error");
   }
 };
 
@@ -74,44 +53,29 @@ export const loginUser = async (req, res) => {
     const user = await findUserByUsername(userName);
 
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid username or password",
-      });
+      return sendErrorResponse(res, "Invalid username.");
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid username or password",
-      });
+      return sendErrorResponse(res, "Invalid password.");
     }
 
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+    const token = jwt.sign({ 
+      id: user.id, 
+      firstName: user.firstName,
+      lastName: user.lastName,
+      userName: user.userName,
+      email: user.email,
+      phone: user.phone }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
-    res.json({
-      success: true,
-      message: "Login successful",
-      token,
-      user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        userName: user.userName,
-        email: user.email,
-        phone: user.phone,
-      },
-    });
+    sendSuccessResponse(res, "Login successful", null, token);
   } catch (error) {
     console.error("loginUser error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    sendErrorResponse(res, "Server error");
   }
 };
 
@@ -120,28 +84,12 @@ export const getUserProfile = async (req, res) => {
     const user = await findUserById(req.user.id);
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
+      return sendErrorResponse(res, "User not found");
     }
 
-    res.json({
-      success: true,
-      user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        userName: user.userName,
-        email: user.email,
-        phone: user.phone,
-      },
-    });
+    return sendSuccessResponse(res, "User fetched successfully", { data: userData(user) });
+
   } catch (error) {
-    console.error("getUserProfile error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    return sendErrorResponse(res, "Server error");
   }
 };

@@ -32,12 +32,14 @@ const UserDashboard = () => {
                 <dl className="row mb-0">
                   {profileFields.map(([label, value]) => (
                     <>
-                      <dt key={label + "-label"} className="col-5 text-muted fw-normal small">
-                        {label}
-                      </dt>
-                      <dd key={label + "-value"} className="col-7 fw-semibold">
-                        {value ?? "—"}
-                      </dd>
+                      <div key={label} className="row">
+                        <dt key={label + "-label"} className="col-5 text-muted fw-normal small">
+                          {label}
+                        </dt>
+                        <dd key={label + "-value"} className="col-7 fw-semibold">
+                          {value ?? "—"}
+                        </dd>
+                      </div>
                     </>
                   ))}
                 </dl>

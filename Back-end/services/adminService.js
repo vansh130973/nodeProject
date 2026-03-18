@@ -1,66 +1,65 @@
 import db from "../config/db.js";
 
-export const findAdminByEmailOrUsername = (email, userName) => {
-  return new Promise((resolve, reject) => {
-    db.query(
+export const findAdminByEmailOrUsername = async (email, userName) => {
+  try {
+    const [result] = await db.query(
       "SELECT * FROM admins WHERE email = ? OR userName = ?",
-      [email, userName],
-      (err, result) => {
-        if (err) return reject(err);
-        resolve(result);
-      },
+      [email, userName]
     );
-  });
+    return result;
+  } catch (err) {
+    throw err;
+  }
 };
 
-export const insertAdmin = (userName, password, email, phone) => {
-  return new Promise((resolve, reject) => {
-    db.query(
+export const insertAdmin = async (userName, password, email, phone) => {
+  try {
+    const [result] = await db.query(
       "INSERT INTO admins (userName, password, email, phone) VALUES (?, ?, ?, ?)",
-      [userName, password, email, phone],
-      (err, result) => {
-        if (err) return reject(err);
-        resolve({
-          id: result.insertId,
-          userName,
-          email,
-          phone,
-        });
-      },
+      [userName, password, email, phone]
     );
-  });
+
+    return {
+      id: result.insertId,
+      userName,
+      email,
+      phone,
+    };
+  } catch (err) {
+    throw err;
+  }
 };
 
-export const findAdminByUsername = (userName) => {
-  return new Promise((resolve, reject) => {
-    db.query(
+export const findAdminByUsername = async (userName) => {
+  try {
+    const [result] = await db.query(
       "SELECT * FROM admins WHERE userName = ?",
-      [userName],
-      (err, result) => {
-        if (err) return reject(err);
-        resolve(result[0] ?? null);
-      },
+      [userName]
     );
-  });
+    return result[0] ?? null;
+  } catch (err) {
+    throw err;
+  }
 };
 
-export const getAllUsers = () => {
-  return new Promise((resolve, reject) => {
-    db.query("SELECT id,firstName, lastName, userName, email, phone FROM users", (err, result) => {
-      if (err) return reject(err);
-      resolve(result);
-    });
-  });
+export const getAllUsers = async () => {
+  try {
+    const [result] = await db.query(
+      "SELECT id, firstName, lastName, userName, email, phone FROM users"
+    );
+    return result;
+  } catch (err) {
+    throw err;
+  }
 };
 
-export const getAllAdmins = () => {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "SELECT id, userName, email, phone FROM admins WHERE role != 'MASTER_ADMIN'",
-      (err, result) => {
-        if (err) return reject(err);
-        resolve(result);
-      },
+export const getAllAdmins = async () => {
+  try {
+    const [result] = await db.query(
+      "SELECT id, userName, email, phone FROM admins WHERE role != 'MASTER_ADMIN'"
     );
-  });
+    return result;
+  } catch (err) {
+    throw err;
+  }
 };

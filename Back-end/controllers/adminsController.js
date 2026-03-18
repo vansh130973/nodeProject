@@ -7,6 +7,7 @@ import {
   getAllUsers,
   getAllAdmins,
 } from "../services/adminService.js";
+import { sendSuccessResponse, sendErrorResponse, adminData } from "../utils/response.js";
 
 export const addAdmin = async (req, res) => {
   try {
@@ -14,10 +15,7 @@ export const addAdmin = async (req, res) => {
 
     const existingAdmin = await findAdminByEmailOrUsername(email, userName);
     if (existingAdmin.length > 0) {
-      return res.status(409).json({
-        success: false,
-        message: "Username or email already exists",
-      });
+      return sendErrorResponse(res, "Username or email already exists");
     }
 
     const hashedPassword = await bcrypt.hash(String(password), 10);
@@ -29,17 +27,9 @@ export const addAdmin = async (req, res) => {
       phone,
     );
 
-    return res.status(201).json({
-      success: true,
-      message: "Admin registered successfully",
-      admin: insertedAdmin,
-    });
+    return sendSuccessResponse( res, "Admin registered successfully", { admin: adminData(insertedAdmin) }, null);
   } catch (error) {
-    console.error("addAdmin error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    return sendErrorResponse(res, "Server error");
   }
 };
 
@@ -50,10 +40,7 @@ export const loginAdmin = async (req, res) => {
     const admin = await findAdminByUsername(userName);
 
     if (!admin) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid username",
-      });
+      return sendErrorResponse(res, "Invalid username");
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -62,53 +49,40 @@ export const loginAdmin = async (req, res) => {
     );
 
     if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid password",
-      });
+      return sendErrorResponse(res, "Invalid password");
     }
 
-    const token = jwt.sign({ id: admin.id, role: admin.role }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    const token = jwt.sign({ 
+      id: admin.id,
+      userName: admin.userName,
+      email: admin.email,
+      phone: admin.phone,
+      role: admin.role      
+    }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
-    return res.status(200).json({
-      success: true,
-      message: "Login successful",
-      token,
-      admin: {
-        id: admin.id,
-        userName: admin.userName,
-        email: admin.email,
-        phone: admin.phone,
-        role: admin.role,
-      },
-    });
+    return sendSuccessResponse(res, "Login successful", null, token);
   } catch (error) {
     console.error("loginAdmin error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    return sendErrorResponse(res, "Server error");
   }
 };
 
 export const showAllUsers = async (req, res) => {
   try {
     const users = await getAllUsers();
-    return res.status(200).json({ success: true, users });
+    return sendSuccessResponse(res, "Users fetched successfully", { users });
   } catch (error) {
     console.error("showAllUsers error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return sendErrorResponse(res, "Server error");
   }
 };
 
 export const showAllAdmins = async (req, res) => {
   try {
     const admins = await getAllAdmins();
-    return res.status(200).json({ success: true, admins });
+    return sendSuccessResponse(res, "Admins fetched successfully", { admins });
   } catch (error) {
     console.error("showAllAdmins error:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return sendErrorResponse(res, "Server error");
   }
 };
