@@ -11,87 +11,80 @@ const INITIAL = {
   password: "", confirmPassword: "",
 };
 
-const validate = (form) => {
-  const errors = [];
-  if (!form.firstName.trim()) errors.push("First name is required");
-  if (!form.lastName.trim()) errors.push("Last name is required");
-  if (!form.userName.trim()) errors.push("Username is required");
-  if (!form.email.trim()) errors.push("Email is required");
+const validateForm = (form) => {
+  const errs = {};
+  if (!form.firstName.trim()) errs.firstName = "First name is required";
+  if (!form.lastName.trim()) errs.lastName = "Last name is required";
+  if (!form.userName.trim()) errs.userName = "Username is required";
+  if (!form.email.trim()) errs.email = "Email is required";
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-    errors.push("Invalid email format");
+    errs.email = "Invalid email format";
   if (!/^[0-9]{10}$/.test(form.phone))
-    errors.push("Phone must be exactly 10 digits");
-  if (!form.gender) errors.push("Gender is required");
-  if (!form.password) errors.push("Password is required");
+    errs.phone = "Phone must be exactly 10 digits";
+  if (!form.gender) errs.gender = "Gender is required";
+  if (!form.password) errs.password = "Password is required";
   else if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(form.password))
-    errors.push("Password must be 8+ characters with 1 uppercase, 1 number, and 1 special character");
-  if (!form.confirmPassword) errors.push("Confirm password is required");
+    errs.password = "Must be 8+ chars with 1 uppercase, 1 number, 1 special character";
+  if (!form.confirmPassword) errs.confirmPassword = "Confirm password is required";
   else if (form.password !== form.confirmPassword)
-    errors.push("Passwords do not match");
-  return errors;
+    errs.confirmPassword = "Passwords do not match";
+  return errs;
 };
 
 const RegisterPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [form, setForm] = useState(INITIAL);
+  const [errors, setErrors] = useState({});
   const [profilePicture, setProfilePicture] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) =>
+  const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setErrors((prev) => ({ ...prev, [e.target.name]: "" }));
+  };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setProfilePicture(file);
-      setPreview(URL.createObjectURL(file));
-    }
+    if (file) { setProfilePicture(file); setPreview(URL.createObjectURL(file)); }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const errors = validate(form);
-    if (errors.length > 0) {
-      errors.forEach((msg) => toast.error(msg));
-      return;
-    }
+    const errs = validateForm(form);
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     const formData = new FormData();
-    formData.append("firstName", form.firstName);
-    formData.append("lastName", form.lastName);
-    formData.append("userName", form.userName);
-    formData.append("email", form.email);
-    formData.append("phone", form.phone);
-    formData.append("gender", form.gender);
-    formData.append("password", form.password);
-    formData.append("confirmPassword", form.confirmPassword);
+    Object.entries({ firstName: form.firstName, lastName: form.lastName,
+      userName: form.userName, email: form.email, phone: form.phone,
+      gender: form.gender, password: form.password,
+      confirmPassword: form.confirmPassword,
+    }).forEach(([k, v]) => formData.append(k, v));
     if (profilePicture) formData.append("profilePicture", profilePicture);
 
     setLoading(true);
     const toastId = toast.loading("Creating your account...");
     try {
       await apiRegisterUser(formData);
-
-      const loginData = await apiLoginUser({
-        userName: form.userName,
-        password: form.password,
-      });
-
+      const loginData = await apiLoginUser({ userName: form.userName, password: form.password });
       login(loginData.token);
-
       const decoded = JSON.parse(atob(loginData.token.split(".")[1]));
       toast.update(toastId, {
         render: `Welcome, ${decoded.userName}!`,
-        type: "success",
-        isLoading: false,
-        autoClose: 3000,
+        type: "success", isLoading: false, autoClose: 3000,
       });
       navigate("/dashboard");
     } catch (err) {
       toast.dismiss(toastId);
-      showApiError(err, (msg) => toast.error(msg));
+      const msg = err.message || "";
+      // Backend inline errors
+      if (msg.toLowerCase().includes("email"))
+        setErrors((p) => ({ ...p, email: msg }));
+      else if (msg.toLowerCase().includes("username"))
+        setErrors((p) => ({ ...p, userName: msg }));
+      else
+        showApiError(err, (m) => toast.error(m));
     } finally {
       setLoading(false);
     }
@@ -104,16 +97,14 @@ const RegisterPage = () => {
           <h4 className="fw-bold mb-3">Create account</h4>
 
           <form onSubmit={handleSubmit} noValidate>
+
             <div className="mb-3 text-center">
               <div className="rounded-circle overflow-hidden mx-auto mb-2 border"
                 style={{ width: 90, height: 90, background: "#f0f0f0" }}>
-                {preview ? (
-                  <img src={preview} alt="preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <div className="d-flex align-items-center justify-content-center h-100 text-muted small">
-                    No Image
-                  </div>
-                )}
+                {preview
+                  ? <img src={preview} alt="preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <div className="d-flex align-items-center justify-content-center h-100 text-muted small">No Image</div>
+                }
               </div>
               <label className="btn btn-sm btn-outline-secondary">
                 Upload Photo
@@ -125,49 +116,50 @@ const RegisterPage = () => {
               <div className="col-6">
                 <InputField label="First Name" id="firstName" name="firstName"
                   type="text" placeholder="First Name"
-                  value={form.firstName} onChange={handleChange} autocomplete="firstName" />
+                  value={form.firstName} onChange={handleChange} error={errors.firstName} />
               </div>
               <div className="col-6">
                 <InputField label="Last Name" id="lastName" name="lastName"
                   type="text" placeholder="Last Name"
-                  value={form.lastName} onChange={handleChange} autocomplete="lastName" />
+                  value={form.lastName} onChange={handleChange} error={errors.lastName} />
               </div>
             </div>
 
             <InputField label="Username" id="userName" name="userName"
               type="text" placeholder="Enter your Username"
-              value={form.userName} onChange={handleChange} autocomplete="userName" />
+              value={form.userName} onChange={handleChange} error={errors.userName} />
 
             <InputField label="Email" id="email" name="email"
               type="email" placeholder="Enter your Email"
-              value={form.email} onChange={handleChange} autocomplete="email" />
+              value={form.email} onChange={handleChange} error={errors.email} />
 
             <InputField label="Phone" id="phone" name="phone"
               type="tel" placeholder="10-digit number"
-              value={form.phone} onChange={handleChange} autocomplete="phone" />
+              value={form.phone} onChange={handleChange} error={errors.phone} />
 
             <div className="mb-3">
               <label className="form-label fw-semibold">Gender</label>
-              <select name="gender" className="form-select" value={form.gender} onChange={handleChange}>
+              <select name="gender"
+                className={`form-select ${errors.gender ? "is-invalid" : ""}`}
+                value={form.gender} onChange={handleChange}>
                 <option value="">Select Gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
                 <option value="other">Other</option>
               </select>
+              {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
             </div>
 
             <InputField label="Password" id="password" name="password"
               type="password" placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
-              value={form.password} onChange={handleChange} autocomplete="password" />
+              value={form.password} onChange={handleChange} error={errors.password} />
 
             <InputField label="Confirm Password" id="confirmPassword" name="confirmPassword"
               type="password" placeholder="Repeat your password"
-              value={form.confirmPassword} onChange={handleChange} autocomplete="confirmPassword" />
+              value={form.confirmPassword} onChange={handleChange} error={errors.confirmPassword} />
 
             <button type="submit" disabled={loading} className="btn btn-warning w-100 mt-2 fw-semibold">
-              {loading ? (
-                <><span className="spinner-border spinner-border-sm me-2" />Registering...</>
-              ) : "Create Account"}
+              {loading ? <><span className="spinner-border spinner-border-sm me-2" />Registering...</> : "Create Account"}
             </button>
           </form>
 

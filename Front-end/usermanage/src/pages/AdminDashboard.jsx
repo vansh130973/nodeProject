@@ -1,4 +1,3 @@
-// pages/AdminDashboard.jsx
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -28,7 +27,7 @@ const validateAdminForm = (form) => {
 
   if (!form.password) errors.password = "Password is required";
   else if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(form.password))
-    errors.password = "Password must be 8+ characters with 1 uppercase, 1 number, and 1 special character (@$!%*?&)";
+    errors.password = "Must be 8+ chars with 1 uppercase, 1 number, 1 special character";
 
   if (!form.conformPassword) errors.conformPassword = "Confirm password is required";
   else if (form.password !== form.conformPassword) errors.conformPassword = "Passwords do not match";
@@ -72,13 +71,12 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  // Derive active tab from current route
   const getActiveTab = () => {
     if (pathname === "/admin/dashboard") return "dashboard";
     if (pathname === "/admin/users") return "users";
     if (pathname === "/admin/admins") return "admins";
     if (pathname === "/admin/add-admin") return "addAdmin";
-    return "dashboard"; // fallback
+    return "dashboard";
   };
   const activeTab = getActiveTab();
 
@@ -87,29 +85,24 @@ const AdminDashboard = () => {
   const [loadingData, setLoadingData] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [formErrors, setFormErrors] = useState({});
   const [formLoading, setFormLoading] = useState(false);
 
-  // Redirect if not admin
   useEffect(() => {
     if (!user || !(user.role === "ADMIN" || user.role === "MASTER_ADMIN")) {
       navigate("/admin/login");
     }
   }, [user, navigate]);
 
-  // Initial data load – separate calls to avoid blocking users when admins fetch fails
   useEffect(() => {
     if (!user) return;
-
     const loadInitial = async () => {
-      // Always fetch users (allowed for both ADMIN and MASTER_ADMIN)
       try {
         const usersData = await apiGetAllUsers();
         setUsers(usersData.users);
       } catch (err) {
         showApiError(err, (msg) => toast.error(msg));
       }
-
-      // Fetch admins only if MASTER_ADMIN
       if (user.role === "MASTER_ADMIN") {
         try {
           const adminsData = await apiGetAllAdmins();
@@ -119,14 +112,11 @@ const AdminDashboard = () => {
         }
       }
     };
-
     loadInitial();
   }, [user]);
 
-  // Load data when activeTab changes (except dashboard and addAdmin)
   useEffect(() => {
     if (activeTab === "dashboard" || activeTab === "addAdmin") return;
-
     const load = async () => {
       setLoadingData(true);
       try {
@@ -134,16 +124,12 @@ const AdminDashboard = () => {
           const data = await apiGetAllUsers();
           setUsers(data.users);
         } else if (activeTab === "admins") {
-          // Only MASTER_ADMIN should be able to load admins
-          if (user?.role !== "MASTER_ADMIN") {
-            throw new Error("Only Master Admin can see this!!!");
-          }
+          if (user?.role !== "MASTER_ADMIN") throw new Error("Only Master Admin can see this!!!");
           const data = await apiGetAllAdmins();
           setAdmins(data.admins);
         }
       } catch (err) {
         showApiError(err, (msg) => toast.error(msg));
-        // Navigate back to dashboard on permission error
         navigate("/admin/dashboard");
       } finally {
         setLoadingData(false);
@@ -155,6 +141,7 @@ const AdminDashboard = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setFormErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
   const handleAddAdmin = async (e) => {
@@ -162,7 +149,7 @@ const AdminDashboard = () => {
 
     const errors = validateAdminForm(form);
     if (Object.keys(errors).length > 0) {
-      Object.values(errors).forEach((msg) => toast.error(msg));
+      setFormErrors(errors);
       return;
     }
 
@@ -177,12 +164,18 @@ const AdminDashboard = () => {
         autoClose: 3000,
       });
       setForm(INITIAL_FORM);
-      // Refresh admins list
+      setFormErrors({});
       const data = await apiGetAllAdmins();
       setAdmins(data.admins);
     } catch (err) {
       toast.dismiss(toastId);
-      showApiError(err, (msg) => toast.error(msg));
+      const msg = err.message || "";
+      if (msg.toLowerCase().includes("email"))
+        setFormErrors((p) => ({ ...p, email: msg }));
+      else if (msg.toLowerCase().includes("username"))
+        setFormErrors((p) => ({ ...p, userName: msg }));
+      else
+        showApiError(err, (m) => toast.error(m));
     } finally {
       setFormLoading(false);
     }
@@ -244,6 +237,7 @@ const AdminDashboard = () => {
 
   const renderContent = () => {
     switch (activeTab) {
+
       case "dashboard":
         return (
           <>
@@ -252,7 +246,7 @@ const AdminDashboard = () => {
               <div className="col-sm-6 col-lg-4">
                 <div
                   className="card border-0 shadow-sm rounded-3 h-100"
-                  style={{ borderLeft: "4px solid #0d6efd" }}
+                  style={{ borderLeft: "4px solid #0d6efd", cursor: "pointer" }}
                   onClick={() => navigate("/admin/users")}
                 >
                   <div className="card-body d-flex align-items-center gap-3">
@@ -318,7 +312,6 @@ const AdminDashboard = () => {
 
       case "admins":
         if (user?.role !== "MASTER_ADMIN") {
-          // This should never happen because the route is protected, but just in case
           navigate("/admin/dashboard");
           return null;
         }
@@ -359,50 +352,50 @@ const AdminDashboard = () => {
         }
         return (
           <>
-            <h5 className="fw-bold mb-4">Add New Admin</h5>
-            <div className="row justify-content-start">
-              <div className="col-md-7 col-lg-5">
+            <div className="row justify-content-center">
+              <div className="col-md-8 col-lg-6">
                 <div className="card border-0 shadow-sm rounded-3">
-                  <div className="card-body">
+                  <h5 className="card-header p-4">Add New Admin</h5>
+                  <div className="card-body p-4">
                     <form onSubmit={handleAddAdmin} noValidate>
                       <InputField
                         label="Username" id="userName" name="userName" type="text"
                         placeholder="adminuser" value={form.userName}
                         onChange={handleChange}
+                        error={formErrors.userName}
                       />
                       <InputField
                         label="Email" id="email" name="email" type="email"
                         placeholder="admin@example.com" value={form.email}
                         onChange={handleChange}
+                        error={formErrors.email}
                       />
                       <InputField
                         label="Phone" id="phone" name="phone" type="tel"
                         placeholder="10-digit number" value={form.phone}
                         onChange={handleChange}
+                        error={formErrors.phone}
                       />
                       <InputField
                         label="Password" id="password" name="password" type="password"
                         placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
                         value={form.password} onChange={handleChange}
+                        error={formErrors.password}
                       />
                       <InputField
                         label="Confirm Password" id="conformPassword" name="conformPassword"
                         type="password" placeholder="Repeat password"
                         value={form.conformPassword} onChange={handleChange}
+                        error={formErrors.conformPassword}
                       />
                       <button
                         type="submit"
                         disabled={formLoading}
-                        className="btn btn-warning w-100 mt-2 fw-semibold"
+                        className="btn btn-warning w-100 py-2 mt-2 fw-semibold"
                       >
                         {formLoading ? (
-                          <>
-                            <span className="spinner-border spinner-border-sm me-2" />
-                            Adding...
-                          </>
-                        ) : (
-                          "Add Admin"
-                        )}
+                          <><span className="spinner-border spinner-border-sm me-2" />Adding...</>
+                        ) : "Add Admin"}
                       </button>
                     </form>
                   </div>

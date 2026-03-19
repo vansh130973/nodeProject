@@ -9,33 +9,47 @@ const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ userName: "", password: "" });
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) =>
+  const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setErrors((prev) => ({ ...prev, [e.target.name]: "" }));
+  };
+
+  const validate = () => {
+    const errs = {};
+    if (!form.userName.trim()) errs.userName = "Username is required";
+    if (!form.password.trim()) errs.password = "Password is required";
+    return errs;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.userName.trim()) return toast.error("Username is required");
-    if (!form.password.trim()) return toast.error("Password is required");
+    const errs = validate();
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setLoading(true);
     const toastId = toast.loading("Signing in...");
     try {
       const data = await apiLoginUser(form);
       login(data.token);
-
       const decoded = JSON.parse(atob(data.token.split(".")[1]));
       toast.update(toastId, {
         render: `Welcome back, ${decoded.userName}!`,
-        type: "success",
-        isLoading: false,
-        autoClose: 3000,
+        type: "success", isLoading: false, autoClose: 3000,
       });
       navigate("/dashboard");
     } catch (err) {
       toast.dismiss(toastId);
-      showApiError(err, (msg) => toast.error(msg));
+      // Backend error — show inline on fields
+      const msg = err.message || "";
+      if (msg.toLowerCase().includes("username"))
+        setErrors({ userName: msg });
+      else if (msg.toLowerCase().includes("password"))
+        setErrors({ password: msg });
+      else
+        showApiError(err, (m) => toast.error(m));
     } finally {
       setLoading(false);
     }
@@ -51,16 +65,16 @@ const LoginPage = () => {
           <form onSubmit={handleSubmit} noValidate>
             <InputField label="Username" id="userName" name="userName"
               type="text" placeholder="Enter your username"
-              value={form.userName} onChange={handleChange} autocomplete="userName" />
+              value={form.userName} onChange={handleChange}
+              error={errors.userName} />
 
             <InputField label="Password" id="password" name="password"
               type="password" placeholder="Enter your password"
-              value={form.password} onChange={handleChange} autocomplete="password" />
+              value={form.password} onChange={handleChange}
+              error={errors.password} />
 
             <button type="submit" disabled={loading} className="btn btn-warning w-100 mt-2 fw-semibold">
-              {loading ? (
-                <><span className="spinner-border spinner-border-sm me-2" />Signing in...</>
-              ) : "Sign In"}
+              {loading ? <><span className="spinner-border spinner-border-sm me-2" />Signing in...</> : "Sign In"}
             </button>
           </form>
 

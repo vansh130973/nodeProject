@@ -15,9 +15,13 @@ export const addAdmin = async (req, res) => {
   try {
     const { userName, password, phone, email } = req.body;
 
-    const existingAdmin = await findAdminByEmailOrUsername(email, userName);
-    if (existingAdmin.length > 0)
-      return sendErrorResponse(res, "Username or email already exists");
+    const existingUsers = await findAdminByEmailOrUsername(email, userName);
+    if (existingUsers.length > 0) {
+      if (existingUsers.some((u) => u.email === email))
+        return sendErrorResponse(res, "Email already registered");
+      if (existingUsers.some((u) => u.userName === userName))
+        return sendErrorResponse(res, "Username already taken");
+    }
 
     const hashedPassword = await bcrypt.hash(String(password), 10);
     const insertedAdmin = await insertAdmin(userName, hashedPassword, email, phone);
