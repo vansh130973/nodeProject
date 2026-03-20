@@ -58,8 +58,7 @@ const AdminLoginPage = () => {
     <div className="min-vh-100 bg-light d-flex align-items-center justify-content-center">
       <div className="card shadow-sm border-0 rounded-4 p-4" style={{ width: "100%", maxWidth: 420 }}>
         <div className="card-body">
-          <h4 className="fw-bold mb-1">Admin Login</h4>
-          <p className="text-muted small mb-4">Sign in to your admin panel</p>
+          <h4 className="fw-bold mb-4">Admin Login</h4>
 
           <form onSubmit={handleSubmit} noValidate>
             <InputField label="Username" id="userName" name="userName"
@@ -72,7 +71,7 @@ const AdminLoginPage = () => {
               value={form.password} onChange={handleChange}
               error={errors.password} />
 
-            <button type="submit" disabled={loading} className="btn btn-dark w-100 mt-2 fw-semibold">
+            <button type="submit" disabled={loading} className="btn btn-warning w-100 mt-2 fw-semibold">
               {loading ? <><span className="spinner-border spinner-border-sm me-2" />Signing in...</> : "Admin Sign In"}
             </button>
           </form>

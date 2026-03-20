@@ -1,11 +1,10 @@
+import { sendErrorResponse } from '../utils/response.js';
+
 export const validate = (schema) => (req, res, next) => {
   const { error } = schema.validate(req.body, { abortEarly: false });
 
   if (error) {
-    return res.status(400).json({
-      success: false,
-      errors: error.details.map((err) => err.message),
-    });
+    return sendErrorResponse(res, 'Validation Error', error.details.map((detail) => detail.message));
   }
   next();
 };

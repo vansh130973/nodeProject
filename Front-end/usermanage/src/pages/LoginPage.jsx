@@ -59,8 +59,7 @@ const LoginPage = () => {
     <div className="min-vh-100 bg-light d-flex align-items-center justify-content-center">
       <div className="card shadow-sm border-0 rounded-4 p-4" style={{ width: "100%", maxWidth: 420 }}>
         <div className="card-body">
-          <h4 className="fw-bold mb-1">User Login</h4>
-          <p className="text-muted small mb-4">Sign in to your account</p>
+          <h4 className="fw-bold mb-4">User Login</h4>
 
           <form onSubmit={handleSubmit} noValidate>
             <InputField label="Username" id="userName" name="userName"

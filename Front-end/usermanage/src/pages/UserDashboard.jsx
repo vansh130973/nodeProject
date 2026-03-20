@@ -148,20 +148,17 @@ const UserDashboard = () => {
       style={{ width: 240, minHeight: "calc(100vh - 56px)", flexShrink: 0 }}>
       <nav className="flex-grow-1 py-2">
         {[
-          { label: "Profile", path: "/dashboard", tab: "profile" },
-          { label: "Edit Profile", path: "/edit-profile", tab: "edit" },
-          { label: "Change Password", path: "/change-password", tab: "password" },
-        ].map(({ label, path, tab }) => (
+          { label: "Profile",         path: "/dashboard",       tab: "profile",  icon: "bi-person-circle" },
+          { label: "Edit Profile",    path: "/edit-profile",    tab: "edit",     icon: "bi-pencil-square" },
+          { label: "Change Password", path: "/change-password", tab: "password", icon: "bi-shield-lock"   },
+        ].map(({ label, path, tab, icon }) => (
           <button key={tab} onClick={() => navigate(path)}
             className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
               ${activeTab === tab ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}>
+            <i className={`bi ${icon} fs-5 flex-shrink-0`} />
             <span className="small">{label}</span>
           </button>
         ))}
-        <button onClick={handleLogout}
-          className="d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start bg-transparent text-danger">
-          <span className="small">Logout</span>
-        </button>
       </nav>
     </div>
   );

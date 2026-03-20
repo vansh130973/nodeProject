@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { useAuth } from "../context/AuthContext";
 import { apiAddAdmin, apiGetAllUsers, apiGetAllAdmins, showApiError } from "../services/api";
 import InputField from "../components/InputField";
+import "bootstrap-icons/font/bootstrap-icons.css";
 
 const INITIAL_FORM = {
   userName: "",
@@ -198,7 +199,8 @@ const AdminDashboard = () => {
             ${activeTab === "dashboard" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
           title={!sidebarOpen ? "Dashboard" : ""}
         >
-          {sidebarOpen ? <span className="small">Dashboard</span> : "D"}
+          <i className="bi bi-speedometer2 fs-5 flex-shrink-0" />
+          {sidebarOpen && <span className="small">Dashboard</span>}
         </button>
 
         <button
@@ -207,7 +209,8 @@ const AdminDashboard = () => {
             ${activeTab === "users" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
           title={!sidebarOpen ? "All Users" : ""}
         >
-          {sidebarOpen ? <span className="small">All Users</span> : "U"}
+          <i className="bi bi-people fs-5 flex-shrink-0" />
+          {sidebarOpen && <span className="small">All Users</span>}
         </button>
 
         {user?.role === "MASTER_ADMIN" && (
@@ -217,7 +220,8 @@ const AdminDashboard = () => {
               ${activeTab === "admins" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
             title={!sidebarOpen ? "All Admins" : ""}
           >
-            {sidebarOpen ? <span className="small">All Admins</span> : "A"}
+            <i className="bi bi-shield-lock fs-5 flex-shrink-0" />
+            {sidebarOpen && <span className="small">All Admins</span>}
           </button>
         )}
 
@@ -228,7 +232,8 @@ const AdminDashboard = () => {
               ${activeTab === "addAdmin" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
             title={!sidebarOpen ? "Add Admin" : ""}
           >
-            {sidebarOpen ? <span className="small">Add Admin</span> : "+"}
+            <i className="bi bi-person-plus fs-5 flex-shrink-0" />
+            {sidebarOpen && <span className="small">Add Admin</span>}
           </button>
         )}
       </nav>
