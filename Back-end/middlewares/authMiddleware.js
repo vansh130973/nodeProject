@@ -1,12 +1,13 @@
 import jwt from "jsonwebtoken";
 import { findUserToken } from "../services/userService.js";
 import { findAdminToken } from "../services/adminService.js";
+import { sendErrorResponse } from "../utils/response.js";
 
 export const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ success: false, message: "Unauthorized Access" });
+    return sendErrorResponse(res, "Unauthorized Access", 401);
   }
 
   const token = authHeader.split(" ")[1];
@@ -21,21 +22,21 @@ export const authenticate = async (req, res, next) => {
       : await findUserToken(token);  
 
     if (!savedToken) {
-      return res.status(401).json({ success: false, message: "Session expired. Please login again." });
+      return sendErrorResponse(res, "Session expired. Please log in again.", 401);
     }
 
     req.user = decoded;
     req.token = token;
     next();
   } catch (err) {
-    return res.status(401).json({ success: false, message: "Invalid token" });
+    return sendErrorResponse(res, "Invalid token. Please log in again.", 401);
   }
 };
 
 export const roleCheck = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: "Access denied." });
+      return sendErrorResponse(res, "Access denied.", 403);
     }
     next();
   };
