@@ -1,4 +1,4 @@
-import db from "../config/db.js";
+import db from "../../../config/db.js";
 
 export const findUserByEmailOrUsername = async (email, userName) => {
   const [result] = await db.query(
@@ -24,7 +24,16 @@ export const findUserById = async (id) => {
   return result[0] ?? null;
 };
 
-export const insertUser = async (firstName, lastName, userName, password, email, phone, gender, profilePicture) => {
+export const insertUser = async (
+  firstName,
+  lastName,
+  userName,
+  password,
+  email,
+  phone,
+  gender,
+  profilePicture
+) => {
   const [result] = await db.query(
     "INSERT INTO users (firstName, lastName, userName, password, email, phone, gender, profilePicture) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     [firstName, lastName, userName, password, email, phone, gender, profilePicture]
@@ -32,7 +41,14 @@ export const insertUser = async (firstName, lastName, userName, password, email,
   return { id: result.insertId, firstName, lastName, userName, email, phone, gender, profilePicture };
 };
 
-export const updateUserProfile = async (id, firstName, lastName, phone, gender, profilePicture) => {
+export const updateUserProfile = async (
+  id,
+  firstName,
+  lastName,
+  phone,
+  gender,
+  profilePicture
+) => {
   await db.query(
     "UPDATE users SET firstName = ?, lastName = ?, phone = ?, gender = ?, profilePicture = ?, updatedAt = NOW() WHERE id = ?",
     [firstName, lastName, phone, gender, profilePicture, id]

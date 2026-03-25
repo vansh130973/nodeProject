@@ -1,4 +1,4 @@
-import db from "../config/db.js";
+import db from "../../../config/db.js";
 
 export const findAdminByEmailOrUsername = async (email, userName) => {
   const [result] = await db.query(

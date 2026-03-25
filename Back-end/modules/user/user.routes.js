@@ -7,16 +7,16 @@ import {
   getUserProfile,
   updateProfile,
   changePassword,
-} from "../controllers/usersController.js";
-import { validate } from "../middlewares/validate.js";
-import { authenticate } from "../middlewares/authMiddleware.js";
+} from "./controllers/user.controller.js";
+import { validate } from "../../middlewares/validate.js";
+import { authenticate } from "../../middlewares/authMiddleware.js";
 import {
   addUserSchema,
   loginUserSchema,
   updateProfileSchema,
   changePasswordSchema,
-} from "../validations/userValidation.js";
-import upload from "../middlewares/upload.js";
+} from "./validations/user.validation.js";
+import upload from "../../middlewares/upload.js";
 
 const router = express.Router();
 

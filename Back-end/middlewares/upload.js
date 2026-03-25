@@ -6,21 +6,11 @@ const storage = multer.diskStorage({
     cb(null, "uploads/profiles/");
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const uniqueName = `user_${Date.now()}_${Math.round(Math.random() * 1e6)}${ext}`;
+    const uniqueName = `user_${Date.now()}_${Math.round(Math.random() * 1e6)}${path.extname(file.originalname)}`;
     cb(null, uniqueName);
   },
 });
 
-const fileFilter = (req, file, cb) => {
-  const allowed = ["image/jpeg", "image/png", "image/webp"];
-  if (allowed.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error("Only JPG, PNG, WEBP allowed"), false);
-  }
-};
-
-const upload = multer({ storage, fileFilter });
+const upload = multer({ storage });
 
 export default upload;

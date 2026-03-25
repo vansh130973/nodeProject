@@ -30,13 +30,13 @@ export const loginUserSchema = Joi.object({
 });
 
 export const updateProfileSchema = Joi.object({
-  firstName:      Joi.string().min(2).max(11).required(),
-  lastName:       Joi.string().min(2).max(11).required(),
+  firstName: Joi.string().min(2).max(11).required(),
+  lastName: Joi.string().min(2).max(11).required(),
   phone: Joi.string()
     .length(10)
     .pattern(/^[0-9]+$/)
     .required(),
-  gender:         Joi.string().valid("male", "female", "other").required(),
+  gender: Joi.string().valid("male", "female", "other").required(),
   profilePicture: Joi.string().allow("", null).optional(),
 });
 

@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
-import { findUserToken } from "../services/userService.js";
-import { findAdminToken } from "../services/adminService.js";
+import { findUserToken } from "../modules/user/models/user.model.js";
+import { findAdminToken } from "../modules/admin/models/admin.model.js";
 import { sendErrorResponse } from "../utils/response.js";
 
 export const authenticate = async (req, res, next) => {

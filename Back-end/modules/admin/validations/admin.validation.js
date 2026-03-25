@@ -37,7 +37,7 @@ export const addAdminSchema = Joi.object({
   }),
 });
 
-export const loginSchema = Joi.object({
+export const loginAdminSchema = Joi.object({
   userName: Joi.string().required(),
   password: Joi.string().required(),
 });

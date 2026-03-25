@@ -8,8 +8,9 @@ import {
   getAllAdmins,
   saveAdminToken,
   deleteAdminToken,
-} from "../services/adminService.js";
-import { sendSuccessResponse, sendErrorResponse, adminData } from "../utils/response.js";
+} from "../models/admin.model.js";
+import { formatAdminData } from "../helpers/admin.helper.js";
+import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
 
 export const addAdmin = async (req, res) => {
   try {
@@ -26,7 +27,13 @@ export const addAdmin = async (req, res) => {
     const hashedPassword = await bcrypt.hash(String(password), 10);
     const insertedAdmin = await insertAdmin(userName, hashedPassword, email, phone);
 
-    return sendSuccessResponse(res, "Admin registered successfully", { admin: adminData(insertedAdmin) }, null, 201);
+    return sendSuccessResponse(
+      res,
+      "Admin registered successfully",
+      { admin: formatAdminData(insertedAdmin) },
+      null,
+      201
+    );
   } catch (error) {
     console.error("addAdmin error:", error);
     return sendErrorResponse(res, "Server error", 500);
@@ -43,8 +50,7 @@ export const loginAdmin = async (req, res) => {
     const isMatch = await bcrypt.compare(String(password), admin.password);
     if (!isMatch) return sendErrorResponse(res, "Invalid password", 401);
 
-    const token = jwt.sign(adminData(admin), process.env.JWT_SECRET, { expiresIn: "1h" });
-
+    const token = jwt.sign(formatAdminData(admin), process.env.JWT_SECRET, { expiresIn: "1h" });
     await saveAdminToken(admin.id, token);
 
     return sendSuccessResponse(res, "Login successful", null, token, 200);

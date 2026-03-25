@@ -9,8 +9,9 @@ import {
   updateUserPassword,
   saveUserToken,
   deleteUserToken,
-} from "../services/userService.js";
-import { sendSuccessResponse, sendErrorResponse, userData } from "../utils/response.js";
+} from "../models/user.model.js";
+import { formatUserData, resolveProfilePicture } from "../helpers/user.helper.js";
+import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
 
 export const registerUser = async (req, res) => {
   try {
@@ -24,16 +25,14 @@ export const registerUser = async (req, res) => {
         return sendErrorResponse(res, "Username already taken", 409);
     }
 
-    const profilePicture = req.file
-      ? `uploads/profiles/${req.file.filename}`
-      : null;
-
+    const profilePicture = resolveProfilePicture(req.file);
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const newUser = await insertUser(
       firstName, lastName, userName, hashedPassword, email, phone, gender, profilePicture
     );
 
-    const token = jwt.sign(userData(newUser), process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign(formatUserData(newUser), process.env.JWT_SECRET, { expiresIn: "1h" });
     await saveUserToken(newUser.id, token);
 
     return sendSuccessResponse(res, "User registered successfully", null, token, 201);
@@ -53,7 +52,7 @@ export const loginUser = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return sendErrorResponse(res, "Invalid password.", 401);
 
-    const token = jwt.sign(userData(user), process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign(formatUserData(user), process.env.JWT_SECRET, { expiresIn: "1h" });
     await saveUserToken(user.id, token);
 
     return sendSuccessResponse(res, "Login successful", null, token, 200);
@@ -77,7 +76,7 @@ export const getDashboard = async (req, res) => {
   try {
     const user = await findUserById(req.user.id);
     if (!user) return sendErrorResponse(res, "User not found", 404);
-    return sendSuccessResponse(res, "Dashboard fetched successfully", { data: userData(user) }, null, 200);
+    return sendSuccessResponse(res, "Dashboard fetched successfully", { data: formatUserData(user) }, null, 200);
   } catch (error) {
     console.error("getDashboard error:", error);
     return sendErrorResponse(res, "Server error", 500);
@@ -88,7 +87,7 @@ export const getUserProfile = async (req, res) => {
   try {
     const user = await findUserById(req.user.id);
     if (!user) return sendErrorResponse(res, "User not found", 404);
-    return sendSuccessResponse(res, "Profile fetched successfully", { data: userData(user) }, null, 200);
+    return sendSuccessResponse(res, "Profile fetched successfully", { data: formatUserData(user) }, null, 200);
   } catch (error) {
     console.error("getUserProfile error:", error);
     return sendErrorResponse(res, "Server error", 500);
@@ -98,15 +97,13 @@ export const getUserProfile = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const { firstName, lastName, phone, gender } = req.body;
-    const profilePicture = req.file
-      ? `uploads/profiles/${req.file.filename}`
-      : req.body.profilePicture ?? null;
+    const profilePicture = resolveProfilePicture(req.file, req.body.profilePicture);
 
     const updatedUser = await updateUserProfile(
       req.user.id, firstName, lastName, phone, gender, profilePicture
     );
 
-    return sendSuccessResponse(res, "Profile updated successfully", { data: userData(updatedUser) }, null, 200);
+    return sendSuccessResponse(res, "Profile updated successfully", { data: formatUserData(updatedUser) }, null, 200);
   } catch (error) {
     console.error("updateProfile error:", error);
     return sendErrorResponse(res, "Server error", 500);
@@ -122,7 +119,6 @@ export const changePassword = async (req, res) => {
 
     const hashedNew = await bcrypt.hash(newPassword, 10);
     await updateUserPassword(user.id, hashedNew);
-
     await deleteUserToken(req.token);
 
     return sendSuccessResponse(res, "Password changed successfully. Please login again.", null, null, 200);
