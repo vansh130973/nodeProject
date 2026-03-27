@@ -16,6 +16,14 @@ export const findUserByUsername = async (userName) => {
   return result[0] ?? null;
 };
 
+export const findUserByEmail = async (email) => {
+  const [result] = await db.query(
+    "SELECT * FROM users WHERE email = ?",
+    [email]
+  );
+  return result[0] ?? null;
+};
+
 export const findUserById = async (id) => {
   const [result] = await db.query(
     "SELECT * FROM users WHERE id = ?",
@@ -25,14 +33,7 @@ export const findUserById = async (id) => {
 };
 
 export const insertUser = async (
-  firstName,
-  lastName,
-  userName,
-  password,
-  email,
-  phone,
-  gender,
-  profilePicture
+  firstName, lastName, userName, password, email, phone, gender, profilePicture
 ) => {
   const [result] = await db.query(
     "INSERT INTO users (firstName, lastName, userName, password, email, phone, gender, profilePicture) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -41,14 +42,7 @@ export const insertUser = async (
   return { id: result.insertId, firstName, lastName, userName, email, phone, gender, profilePicture };
 };
 
-export const updateUserProfile = async (
-  id,
-  firstName,
-  lastName,
-  phone,
-  gender,
-  profilePicture
-) => {
+export const updateUserProfile = async (id, firstName, lastName, phone, gender, profilePicture) => {
   await db.query(
     "UPDATE users SET firstName = ?, lastName = ?, phone = ?, gender = ?, profilePicture = ?, updatedAt = NOW() WHERE id = ?",
     [firstName, lastName, phone, gender, profilePicture, id]
@@ -83,4 +77,24 @@ export const deleteUserToken = async (token) => {
     "DELETE FROM userToken WHERE token = ?",
     [token]
   );
+};
+
+export const saveOtp = async (userId, otp, expiresAt) => {
+  await db.query("DELETE FROM userOtp WHERE userId = ?", [userId]);
+  await db.query(
+    "INSERT INTO userOtp (userId, otp, expiresAt) VALUES (?, ?, ?)",
+    [userId, otp, expiresAt]
+  );
+};
+
+export const findOtpByUserId = async (userId) => {
+  const [result] = await db.query(
+    "SELECT * FROM userOtp WHERE userId = ?",
+    [userId]
+  );
+  return result[0] ?? null;
+};
+
+export const deleteOtp = async (userId) => {
+  await db.query("DELETE FROM userOtp WHERE userId = ?", [userId]);
 };

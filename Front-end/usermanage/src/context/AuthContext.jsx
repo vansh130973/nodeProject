@@ -12,7 +12,6 @@ const decodeToken = (token) => {
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(() => localStorage.getItem("token"));
-
   const [user, setUser] = useState(() => {
     const savedToken = localStorage.getItem("token");
     return savedToken ? decodeToken(savedToken) : null;
@@ -21,9 +20,8 @@ export const AuthProvider = ({ children }) => {
   const login = useCallback((token) => {
     localStorage.setItem("token", token);
     localStorage.removeItem("user");
-    const decoded = decodeToken(token);
     setToken(token);
-    setUser(decoded);
+    setUser(decodeToken(token));
   }, []);
 
   const logout = useCallback(() => {

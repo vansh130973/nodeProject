@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { useAuth } from "../context/AuthContext";
-import { apiLoginUser, showApiError } from "../services/api";
-import InputField from "../components/InputField";
+import { useAuth } from "../../../context/AuthContext";
+import { apiLoginUser } from "../services/user.service";
+import { validateLoginForm } from "../validations/user.validation";
+import { showApiError } from "../../../utils/api";
+import InputField from "../../../components/InputField";
 
 const LoginPage = () => {
   const { login } = useAuth();
@@ -17,16 +19,9 @@ const LoginPage = () => {
     setErrors((prev) => ({ ...prev, [e.target.name]: "" }));
   };
 
-  const validate = () => {
-    const errs = {};
-    if (!form.userName.trim()) errs.userName = "Username is required";
-    if (!form.password.trim()) errs.password = "Password is required";
-    return errs;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const errs = validate();
+    const errs = validateLoginForm(form);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setLoading(true);
@@ -42,14 +37,10 @@ const LoginPage = () => {
       navigate("/dashboard");
     } catch (err) {
       toast.dismiss(toastId);
-      // Backend error — show inline on fields
       const msg = err.message || "";
-      if (msg.toLowerCase().includes("username"))
-        setErrors({ userName: msg });
-      else if (msg.toLowerCase().includes("password"))
-        setErrors({ password: msg });
-      else
-        showApiError(err, (m) => toast.error(m));
+      if (msg.toLowerCase().includes("username")) setErrors({ userName: msg });
+      else if (msg.toLowerCase().includes("password")) setErrors({ password: msg });
+      else showApiError(err, (m) => toast.error(m));
     } finally {
       setLoading(false);
     }
@@ -60,32 +51,41 @@ const LoginPage = () => {
       <div className="card shadow-sm border-0 rounded-4 p-4" style={{ width: "100%", maxWidth: 420 }}>
         <div className="card-body">
           <h4 className="fw-bold mb-4">User Login</h4>
-
           <form onSubmit={handleSubmit} noValidate>
             <InputField label="Username" id="userName" name="userName"
               type="text" placeholder="Enter your username"
-              value={form.userName} onChange={handleChange}
-              error={errors.userName} />
+              value={form.userName} onChange={handleChange} error={errors.userName} />
 
-            <InputField label="Password" id="password" name="password"
-              type="password" placeholder="Enter your password"
-              value={form.password} onChange={handleChange}
-              error={errors.password} />
+            <div className="mb-3">
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <label htmlFor="password" className="form-label fw-semibold mb-0">Password</label>
+              </div>
+              <input
+                id="password" name="password" type="password"
+                placeholder="Enter your password"
+                className={`form-control ${errors.password ? "is-invalid" : ""}`}
+                value={form.password} onChange={handleChange}
+              />
+              {errors.password && <div className="invalid-feedback">{errors.password}</div>}
+            </div>
 
             <button type="submit" disabled={loading} className="btn btn-warning w-100 mt-2 fw-semibold">
               {loading ? <><span className="spinner-border spinner-border-sm me-2" />Signing in...</> : "Sign In"}
             </button>
           </form>
-
           <hr className="my-3" />
           <p className="text-center small mb-1">
             Don't have an account?{" "}
             <Link to="/register" className="text-decoration-none">Register</Link>
           </p>
-          <p className="text-center small text-muted">
+          <p className="text-center small text-muted mb-1">
             Admin?{" "}
             <Link to="/admin/login" className="text-decoration-none text-secondary">Admin Login</Link>
           </p>
+          <p className="text-center small text-muted">
+            <Link to="/forgot-password" className="text-decoration-none small text-danger fw-semibold">Forgot password?</Link>
+          </p>
+          
         </div>
       </div>
     </div>

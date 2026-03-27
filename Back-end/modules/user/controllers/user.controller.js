@@ -4,13 +4,23 @@ import {
   findUserByEmailOrUsername,
   insertUser,
   findUserByUsername,
+  findUserByEmail,
   findUserById,
   updateUserProfile,
   updateUserPassword,
   saveUserToken,
   deleteUserToken,
+  saveOtp,
+  findOtpByUserId,
+  deleteOtp,
 } from "../models/user.model.js";
-import { formatUserData, resolveProfilePicture } from "../helpers/user.helper.js";
+import {
+  formatUserData,
+  resolveProfilePicture,
+  generateOtp,
+  otpExpiryTime,
+  sendOtpEmail,
+} from "../helpers/user.helper.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
 
 export const registerUser = async (req, res) => {
@@ -123,6 +133,78 @@ export const changePassword = async (req, res) => {
 
     return sendSuccessResponse(res, "Password changed successfully. Please login again.", null, null, 200);
   } catch (error) {
+    return sendErrorResponse(res, "Server error", 500);
+  }
+};
+
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await findUserByEmail(email);
+    if (!user) {
+      return sendSuccessResponse(res, "If this email exists, an OTP has been sent.", null, null, 200);
+    }
+
+    const otp = generateOtp();
+    const expiresAt = otpExpiryTime(10); // valid for 10 minutes
+
+    await saveOtp(user.id, otp, expiresAt);
+    await sendOtpEmail(email, otp);
+
+    return sendSuccessResponse(res, "OTP sent to your email.", null, null, 200);
+  } catch (error) {
+    console.error("forgotPassword error:", error);
+    return sendErrorResponse(res, "Server error", 500);
+  }
+};
+
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await findUserByEmail(email);
+    if (!user) return sendErrorResponse(res, "Invalid request.", 400);
+
+    const record = await findOtpByUserId(user.id);
+    if (!record) return sendErrorResponse(res, "OTP not found. Please request a new one.", 400);
+
+    if (new Date() > new Date(record.expiresAt))
+      return sendErrorResponse(res, "OTP has expired. Please try Again.", 400);
+
+    if (record.otp !== otp)
+      return sendErrorResponse(res, "Invalid OTP.", 400);
+
+    return sendSuccessResponse(res, "OTP verified successfully.", null, null, 200);
+  } catch (error) {
+    console.error("verifyOtp error:", error);
+    return sendErrorResponse(res, "Server error", 500);
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    const user = await findUserByEmail(email);
+    if (!user) return sendErrorResponse(res, "Invalid request.", 400);
+
+    const record = await findOtpByUserId(user.id);
+    if (!record) return sendErrorResponse(res, "OTP not found. Please request a new one.", 400);
+
+    if (new Date() > new Date(record.expiresAt))
+      return sendErrorResponse(res, "OTP has expired. Please request a new one.", 400);
+
+    if (record.otp !== otp)
+      return sendErrorResponse(res, "Invalid OTP.", 400);
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await updateUserPassword(user.id, hashedPassword);
+    await deleteOtp(user.id);
+
+    return sendSuccessResponse(res, "Password reset successfully. Please login.", null, null, 200);
+  } catch (error) {
+    console.error("resetPassword error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };

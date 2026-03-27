@@ -1,4 +1,3 @@
-// Reusable controlled input with Bootstrap styling, label, and error display
 const InputField = ({ label, id, error, ...props }) => (
   <div className="mb-3">
     <label htmlFor={id} className="form-label fw-semibold">

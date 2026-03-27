@@ -1,41 +1,19 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
-import { useAuth } from "../context/AuthContext";
-import { apiAddAdmin, apiGetAllUsers, apiGetAllAdmins, showApiError } from "../services/api";
-import InputField from "../components/InputField";
+import { useAuth } from "../../../context/AuthContext";
+import { apiAddAdmin, apiGetAllAdmins, apiGetAllUsers } from "../services/admin.service";
+import { validateAddAdminForm } from "../validations/admin.validation";
+import { showApiError } from "../../../utils/api";
+import useAdminData from "../hooks/useAdminData";
+import InputField from "../../../components/InputField";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 const INITIAL_FORM = {
-  userName: "",
-  email: "",
-  phone: "",
-  password: "",
-  conformPassword: "",
+  userName: "", email: "", phone: "", password: "", conformPassword: "",
 };
 
-const validateAdminForm = (form) => {
-  const errors = {};
-  if (!form.userName.trim()) errors.userName = "Username is required";
-  else if (form.userName.length < 3) errors.userName = "Username must be at least 3 characters";
-  else if (form.userName.length > 20) errors.userName = "Username must not exceed 20 characters";
-
-  if (!form.email.trim()) errors.email = "Email is required";
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = "Invalid email format";
-
-  if (!form.phone.trim()) errors.phone = "Phone number is required";
-  else if (!/^[0-9]{10}$/.test(form.phone)) errors.phone = "Phone number must be exactly 10 digits";
-
-  if (!form.password) errors.password = "Password is required";
-  else if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(form.password))
-    errors.password = "Must be 8+ chars with 1 uppercase, 1 number, 1 special character";
-
-  if (!form.conformPassword) errors.conformPassword = "Confirm password is required";
-  else if (form.password !== form.conformPassword) errors.conformPassword = "Passwords do not match";
-
-  return errors;
-};
-
+// Reusable table component
 const DataTable = ({ columns, rows, emptyMsg }) => (
   <div className="table-responsive">
     <table className="table table-bordered table-hover align-middle mb-0">
@@ -49,16 +27,12 @@ const DataTable = ({ columns, rows, emptyMsg }) => (
       <tbody>
         {rows.length === 0 ? (
           <tr>
-            <td colSpan={columns.length} className="text-center text-muted py-4">
-              {emptyMsg}
-            </td>
+            <td colSpan={columns.length} className="text-center text-muted py-4">{emptyMsg}</td>
           </tr>
         ) : (
           rows.map((row, i) => (
             <tr key={i}>
-              {Object.values(row).map((val, j) => (
-                <td key={j}>{val}</td>
-              ))}
+              {Object.values(row).map((val, j) => <td key={j}>{val}</td>)}
             </tr>
           ))
         )}
@@ -71,6 +45,7 @@ const AdminDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { users, admins, setAdmins } = useAdminData();
 
   const getActiveTab = () => {
     if (pathname === "/admin/dashboard") return "dashboard";
@@ -81,51 +56,22 @@ const AdminDashboard = () => {
   };
   const activeTab = getActiveTab();
 
-  const [users, setUsers] = useState([]);
-  const [admins, setAdmins] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [form, setForm] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [formLoading, setFormLoading] = useState(false);
 
+  // Reload tab-specific data on tab switch
   useEffect(() => {
-    if (!user || !(user.role === "ADMIN" || user.role === "MASTER_ADMIN")) {
-      navigate("/admin/login");
-    }
-  }, [user, navigate]);
-
-  useEffect(() => {
-    if (!user) return;
-    const loadInitial = async () => {
-      try {
-        const usersData = await apiGetAllUsers();
-        setUsers(usersData.users);
-      } catch (err) {
-        showApiError(err, (msg) => toast.error(msg));
-      }
-      if (user.role === "MASTER_ADMIN") {
-        try {
-          const adminsData = await apiGetAllAdmins();
-          setAdmins(adminsData.admins);
-        } catch (err) {
-          showApiError(err, (msg) => toast.error(msg));
-        }
-      }
-    };
-    loadInitial();
-  }, [user]);
-
-  useEffect(() => {
-    if (activeTab === "dashboard" || activeTab === "addAdmin") return;
+    if (activeTab === "dashboard" || activeTab === "addAdmin" || !user) return;
     const load = async () => {
       setLoadingData(true);
       try {
         if (activeTab === "users") {
-          const data = await apiGetAllUsers();
-          setUsers(data.users);
+          // users already loaded via useAdminData
         } else if (activeTab === "admins") {
-          if (user?.role !== "MASTER_ADMIN") throw new Error("Only Master Admin can see this!!!");
+          if (user?.role !== "MASTER_ADMIN") throw new Error("Only Master Admin can see this!");
           const data = await apiGetAllAdmins();
           setAdmins(data.admins);
         }
@@ -147,12 +93,8 @@ const AdminDashboard = () => {
 
   const handleAddAdmin = async (e) => {
     e.preventDefault();
-
-    const errors = validateAdminForm(form);
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
-    }
+    const errors = validateAddAdminForm(form);
+    if (Object.keys(errors).length > 0) { setFormErrors(errors); return; }
 
     setFormLoading(true);
     const toastId = toast.loading("Adding admin...");
@@ -160,9 +102,7 @@ const AdminDashboard = () => {
       await apiAddAdmin(form);
       toast.update(toastId, {
         render: "Admin added successfully!",
-        type: "success",
-        isLoading: false,
-        autoClose: 3000,
+        type: "success", isLoading: false, autoClose: 3000,
       });
       setForm(INITIAL_FORM);
       setFormErrors({});
@@ -192,57 +132,40 @@ const AdminDashboard = () => {
         flexShrink: 0,
       }}
     >
+      <button
+        className="btn btn-sm btn-outline-secondary m-2 align-self-end"
+        onClick={() => setSidebarOpen((prev) => !prev)}
+        title={sidebarOpen ? "Collapse" : "Expand"}
+      >
+        <i className={`bi ${sidebarOpen ? "bi-chevron-left" : "bi-chevron-right"}`} />
+      </button>
+
       <nav className="flex-grow-1 py-2">
-        <button
-          onClick={() => navigate("/admin/dashboard")}
-          className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-            ${activeTab === "dashboard" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
-          title={!sidebarOpen ? "Dashboard" : ""}
-        >
-          <i className="bi bi-speedometer2 fs-5 flex-shrink-0" />
-          {sidebarOpen && <span className="small">Dashboard</span>}
-        </button>
-
-        <button
-          onClick={() => navigate("/admin/users")}
-          className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-            ${activeTab === "users" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
-          title={!sidebarOpen ? "All Users" : ""}
-        >
-          <i className="bi bi-people fs-5 flex-shrink-0" />
-          {sidebarOpen && <span className="small">All Users</span>}
-        </button>
-
-        {user?.role === "MASTER_ADMIN" && (
-          <button
-            onClick={() => navigate("/admin/admins")}
-            className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-              ${activeTab === "admins" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
-            title={!sidebarOpen ? "All Admins" : ""}
-          >
-            <i className="bi bi-shield-lock fs-5 flex-shrink-0" />
-            {sidebarOpen && <span className="small">All Admins</span>}
-          </button>
-        )}
-
-        {user?.role === "MASTER_ADMIN" && (
-          <button
-            onClick={() => navigate("/admin/add-admin")}
-            className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-              ${activeTab === "addAdmin" ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
-            title={!sidebarOpen ? "Add Admin" : ""}
-          >
-            <i className="bi bi-person-plus fs-5 flex-shrink-0" />
-            {sidebarOpen && <span className="small">Add Admin</span>}
-          </button>
-        )}
+        {[
+          { label: "Dashboard", path: "/admin/dashboard", tab: "dashboard", icon: "bi-speedometer2", roles: ["ADMIN", "MASTER_ADMIN"] },
+          { label: "All Users",  path: "/admin/users",     tab: "users",     icon: "bi-people",       roles: ["ADMIN", "MASTER_ADMIN"] },
+          { label: "All Admins", path: "/admin/admins",    tab: "admins",    icon: "bi-shield-lock",  roles: ["MASTER_ADMIN"] },
+          { label: "Add Admin",  path: "/admin/add-admin", tab: "addAdmin",  icon: "bi-person-plus",  roles: ["MASTER_ADMIN"] },
+        ]
+          .filter(({ roles }) => roles.includes(user?.role))
+          .map(({ label, path, tab, icon }) => (
+            <button
+              key={tab}
+              onClick={() => navigate(path)}
+              className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
+                ${activeTab === tab ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
+              title={!sidebarOpen ? label : ""}
+            >
+              <i className={`bi ${icon} fs-5 flex-shrink-0`} />
+              {sidebarOpen && <span className="small">{label}</span>}
+            </button>
+          ))}
       </nav>
     </div>
   );
 
   const renderContent = () => {
     switch (activeTab) {
-
       case "dashboard":
         return (
           <>
@@ -266,7 +189,7 @@ const AdminDashboard = () => {
                 <div className="col-sm-6 col-lg-4">
                   <div
                     className="card border-0 shadow-sm rounded-3 h-100"
-                    style={{ borderLeft: "4px solid rgba(255, 193, 7, 1)", cursor: "pointer" }}
+                    style={{ borderLeft: "4px solid rgba(255,193,7,1)", cursor: "pointer" }}
                     onClick={() => navigate("/admin/admins")}
                   >
                     <div className="card-body d-flex align-items-center gap-3">
@@ -293,19 +216,13 @@ const AdminDashboard = () => {
               </div>
               <div className="card-body p-0">
                 {loadingData ? (
-                  <div className="text-center py-5">
-                    <div className="spinner-border text-primary" />
-                  </div>
+                  <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
                 ) : (
                   <DataTable
                     columns={["ID", "First Name", "Last Name", "Username", "Phone", "Email"]}
                     rows={users.map((u) => ({
-                      id: u.id,
-                      firstName: u.firstName,
-                      lastName: u.lastName,
-                      userName: u.userName,
-                      phone: u.phone,
-                      email: u.email,
+                      id: u.id, firstName: u.firstName, lastName: u.lastName,
+                      userName: u.userName, phone: u.phone, email: u.email,
                     }))}
                     emptyMsg="No users found"
                   />
@@ -316,10 +233,7 @@ const AdminDashboard = () => {
         );
 
       case "admins":
-        if (user?.role !== "MASTER_ADMIN") {
-          navigate("/admin/dashboard");
-          return null;
-        }
+        if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
         return (
           <>
             <h5 className="fw-bold mb-4">All Admins</h5>
@@ -330,17 +244,12 @@ const AdminDashboard = () => {
               </div>
               <div className="card-body p-0">
                 {loadingData ? (
-                  <div className="text-center py-5">
-                    <div className="spinner-border text-warning" />
-                  </div>
+                  <div className="text-center py-5"><div className="spinner-border text-warning" /></div>
                 ) : (
                   <DataTable
                     columns={["ID", "Username", "Email", "Phone"]}
                     rows={admins.map((a) => ({
-                      id: a.id,
-                      userName: a.userName,
-                      email: a.email,
-                      phone: a.phone,
+                      id: a.id, userName: a.userName, email: a.email, phone: a.phone,
                     }))}
                     emptyMsg="No admins found"
                   />
@@ -351,10 +260,7 @@ const AdminDashboard = () => {
         );
 
       case "addAdmin":
-        if (user?.role !== "MASTER_ADMIN") {
-          navigate("/admin/dashboard");
-          return null;
-        }
+        if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
         return (
           <>
             <div className="row justify-content-center">
@@ -363,44 +269,27 @@ const AdminDashboard = () => {
                   <h5 className="card-header p-4">Add New Admin</h5>
                   <div className="card-body p-4">
                     <form onSubmit={handleAddAdmin} noValidate>
-                      <InputField
-                        label="Username" id="userName" name="userName" type="text"
+                      <InputField label="Username" id="userName" name="userName" type="text"
                         placeholder="adminuser" value={form.userName}
-                        onChange={handleChange}
-                        error={formErrors.userName}
-                      />
-                      <InputField
-                        label="Email" id="email" name="email" type="email"
+                        onChange={handleChange} error={formErrors.userName} />
+                      <InputField label="Email" id="email" name="email" type="email"
                         placeholder="admin@example.com" value={form.email}
-                        onChange={handleChange}
-                        error={formErrors.email}
-                      />
-                      <InputField
-                        label="Phone" id="phone" name="phone" type="tel"
+                        onChange={handleChange} error={formErrors.email} />
+                      <InputField label="Phone" id="phone" name="phone" type="tel"
                         placeholder="10-digit number" value={form.phone}
-                        onChange={handleChange}
-                        error={formErrors.phone}
-                      />
-                      <InputField
-                        label="Password" id="password" name="password" type="password"
+                        onChange={handleChange} error={formErrors.phone} />
+                      <InputField label="Password" id="password" name="password" type="password"
                         placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
-                        value={form.password} onChange={handleChange}
-                        error={formErrors.password}
-                      />
-                      <InputField
-                        label="Confirm Password" id="conformPassword" name="conformPassword"
+                        value={form.password} onChange={handleChange} error={formErrors.password} />
+                      <InputField label="Confirm Password" id="conformPassword" name="conformPassword"
                         type="password" placeholder="Repeat password"
                         value={form.conformPassword} onChange={handleChange}
-                        error={formErrors.conformPassword}
-                      />
-                      <button
-                        type="submit"
-                        disabled={formLoading}
-                        className="btn btn-warning w-100 py-2 mt-2 fw-semibold"
-                      >
-                        {formLoading ? (
-                          <><span className="spinner-border spinner-border-sm me-2" />Adding...</>
-                        ) : "Add Admin"}
+                        error={formErrors.conformPassword} />
+                      <button type="submit" disabled={formLoading}
+                        className="btn btn-warning w-100 py-2 mt-2 fw-semibold">
+                        {formLoading
+                          ? <><span className="spinner-border spinner-border-sm me-2" />Adding...</>
+                          : "Add Admin"}
                       </button>
                     </form>
                   </div>
@@ -410,8 +299,7 @@ const AdminDashboard = () => {
           </>
         );
 
-      default:
-        return null;
+      default: return null;
     }
   };
 

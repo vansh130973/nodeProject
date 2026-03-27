@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { apiLogoutUser, apiLogoutAdmin } from "../services/api";
+import { apiLogoutUser } from "../modules/user/services/user.service";
+import { apiLogoutAdmin } from "../modules/admin/services/admin.service";
 
 const AppNavbar = () => {
   const { user, logout } = useAuth();
@@ -10,11 +11,8 @@ const AppNavbar = () => {
 
   const handleLogout = async () => {
     try {
-      if (isAdmin) {
-        await apiLogoutAdmin();
-      } else {
-        await apiLogoutUser();
-      }
+      if (isAdmin) await apiLogoutAdmin();
+      else await apiLogoutUser();
     } catch (_) {}
     logout();
     navigate(isAdmin ? "/admin/login" : "/login");
@@ -54,9 +52,7 @@ const AppNavbar = () => {
 
         {user && (
           <div className="d-flex align-items-center gap-3">
-            <span className="text-light small">
-              Login as:- {user.userName}
-            </span>
+            <span className="text-light small">Login as:- {user.userName}</span>
             <button className="btn btn-sm btn-danger" onClick={handleLogout}>
               Logout
             </button>

@@ -1,19 +1,23 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../../../context/AuthContext";
 import {
-  apiGetUserProfile, apiUpdateUserProfile,
-  apiChangePassword, apiLogoutUser, showApiError,
-} from "../services/api";
-import InputField from "../components/InputField";
-
-const BASE_URL = "http://localhost:3200";
+  apiUpdateUserProfile,
+  apiChangePassword,
+  apiLogoutUser,
+} from "../services/user.service";
+import { validateEditProfileForm, validateChangePasswordForm } from "../validations/user.validation";
+import { showApiError, BASE_URL } from "../../../utils/api";
+import useUserProfile from "../hooks/useUserProfile";
+import InputField from "../../../components/InputField";
+import "bootstrap-icons/font/bootstrap-icons.css";
 
 const UserDashboard = () => {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { profile, setProfile } = useUserProfile();
 
   const getActiveTab = () => {
     if (pathname === "/dashboard") return "profile";
@@ -22,8 +26,6 @@ const UserDashboard = () => {
     return "profile";
   };
   const activeTab = getActiveTab();
-
-  const [profile, setProfile] = useState(null);
 
   const [editForm, setEditForm] = useState({ firstName: "", lastName: "", phone: "", gender: "" });
   const [editErrors, setEditErrors] = useState({});
@@ -35,20 +37,15 @@ const UserDashboard = () => {
   const [pwErrors, setPwErrors] = useState({});
   const [pwLoading, setPwLoading] = useState(false);
 
-  useEffect(() => {
-    if (!user) { navigate("/login"); return; }
-    apiGetUserProfile()
-      .then((res) => {
-        setProfile(res.data);
-        setEditForm({
-          firstName: res.data.firstName,
-          lastName: res.data.lastName,
-          phone: res.data.phone,
-          gender: res.data.gender ?? "",
-        });
-      })
-      .catch(() => toast.error("Failed to load profile"));
-  }, [user, navigate]);
+  // Sync editForm when profile loads
+  if (profile && !editForm.firstName && profile.firstName) {
+    setEditForm({
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      phone: profile.phone,
+      gender: profile.gender ?? "",
+    });
+  }
 
   const handleEditChange = (e) => {
     setEditForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -65,29 +62,9 @@ const UserDashboard = () => {
     if (file) { setNewImage(file); setPreview(URL.createObjectURL(file)); }
   };
 
-  const validateEdit = () => {
-    const errs = {};
-    if (!editForm.firstName.trim()) errs.firstName = "First name is required";
-    if (!editForm.lastName.trim()) errs.lastName = "Last name is required";
-    if (!/^[0-9]{10}$/.test(editForm.phone)) errs.phone = "Phone must be exactly 10 digits";
-    if (!editForm.gender) errs.gender = "Gender is required";
-    return errs;
-  };
-
-  const validatePw = () => {
-    const errs = {};
-    if (!pwForm.newPassword) errs.newPassword = "New password is required";
-    else if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(pwForm.newPassword))
-      errs.newPassword = "Must be 8+ chars with 1 uppercase, 1 number, 1 special character";
-    if (!pwForm.confirmNewPassword) errs.confirmNewPassword = "Please confirm your password";
-    else if (pwForm.newPassword !== pwForm.confirmNewPassword)
-      errs.confirmNewPassword = "Passwords do not match";
-    return errs;
-  };
-
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    const errs = validateEdit();
+    const errs = validateEditProfileForm(editForm);
     if (Object.keys(errs).length > 0) { setEditErrors(errs); return; }
 
     const formData = new FormData();
@@ -114,7 +91,7 @@ const UserDashboard = () => {
 
   const handlePwSubmit = async (e) => {
     e.preventDefault();
-    const errs = validatePw();
+    const errs = validateChangePasswordForm(pwForm);
     if (Object.keys(errs).length > 0) { setPwErrors(errs); return; }
 
     setPwLoading(true);
@@ -129,12 +106,6 @@ const UserDashboard = () => {
     } finally {
       setPwLoading(false);
     }
-  };
-
-  const handleLogout = async () => {
-    try { await apiLogoutUser(); } catch (_) {}
-    logout();
-    navigate("/login");
   };
 
   const imgSrc = preview
@@ -289,14 +260,12 @@ const UserDashboard = () => {
                         type="password" placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
                         value={pwForm.newPassword} onChange={handlePwChange}
                         error={pwErrors.newPassword} />
-
                       <div className="mb-4">
                         <InputField label="Confirm New Password" id="confirmNewPassword" name="confirmNewPassword"
                           type="password" placeholder="Repeat new password"
                           value={pwForm.confirmNewPassword} onChange={handlePwChange}
                           error={pwErrors.confirmNewPassword} />
                       </div>
-
                       <button type="submit" disabled={pwLoading} className="btn btn-danger w-100 py-2 fw-semibold">
                         {pwLoading ? <><span className="spinner-border spinner-border-sm me-2" />Changing...</> : "Change Password"}
                       </button>

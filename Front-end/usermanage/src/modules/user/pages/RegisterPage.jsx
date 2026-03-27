@@ -1,34 +1,16 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { useAuth } from "../context/AuthContext";
-import { apiRegisterUser, apiLoginUser, showApiError } from "../services/api";
-import InputField from "../components/InputField";
+import { useAuth } from "../../../context/AuthContext";
+import { apiRegisterUser, apiLoginUser } from "../services/user.service";
+import { validateRegisterForm } from "../validations/user.validation";
+import { showApiError } from "../../../utils/api";
+import InputField from "../../../components/InputField";
 
 const INITIAL = {
   firstName: "", lastName: "", userName: "",
   email: "", phone: "", gender: "",
   password: "", confirmPassword: "",
-};
-
-const validateForm = (form) => {
-  const errs = {};
-  if (!form.firstName.trim()) errs.firstName = "First name is required";
-  if (!form.lastName.trim()) errs.lastName = "Last name is required";
-  if (!form.userName.trim()) errs.userName = "Username is required";
-  if (!form.email.trim()) errs.email = "Email is required";
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-    errs.email = "Invalid email format";
-  if (!/^[0-9]{10}$/.test(form.phone))
-    errs.phone = "Phone must be exactly 10 digits";
-  if (!form.gender) errs.gender = "Gender is required";
-  if (!form.password) errs.password = "Password is required";
-  else if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/.test(form.password))
-    errs.password = "Must be 8+ chars with 1 uppercase, 1 number, 1 special character";
-  if (!form.confirmPassword) errs.confirmPassword = "Confirm password is required";
-  else if (form.password !== form.confirmPassword)
-    errs.confirmPassword = "Passwords do not match";
-  return errs;
 };
 
 const RegisterPage = () => {
@@ -52,14 +34,15 @@ const RegisterPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const errs = validateForm(form);
+    const errs = validateRegisterForm(form);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     const formData = new FormData();
-    Object.entries({ firstName: form.firstName, lastName: form.lastName,
-      userName: form.userName, email: form.email, phone: form.phone,
-      gender: form.gender, password: form.password,
-      confirmPassword: form.confirmPassword,
+    Object.entries({
+      firstName: form.firstName, lastName: form.lastName,
+      userName: form.userName, email: form.email,
+      phone: form.phone, gender: form.gender,
+      password: form.password, confirmPassword: form.confirmPassword,
     }).forEach(([k, v]) => formData.append(k, v));
     if (profilePicture) formData.append("profilePicture", profilePicture);
 
@@ -78,13 +61,9 @@ const RegisterPage = () => {
     } catch (err) {
       toast.dismiss(toastId);
       const msg = err.message || "";
-      // Backend inline errors
-      if (msg.toLowerCase().includes("email"))
-        setErrors((p) => ({ ...p, email: msg }));
-      else if (msg.toLowerCase().includes("username"))
-        setErrors((p) => ({ ...p, userName: msg }));
-      else
-        showApiError(err, (m) => toast.error(m));
+      if (msg.toLowerCase().includes("email")) setErrors((p) => ({ ...p, email: msg }));
+      else if (msg.toLowerCase().includes("username")) setErrors((p) => ({ ...p, userName: msg }));
+      else showApiError(err, (m) => toast.error(m));
     } finally {
       setLoading(false);
     }
@@ -95,7 +74,6 @@ const RegisterPage = () => {
       <div className="card shadow-sm border-0 rounded-4 p-4" style={{ width: "100%", maxWidth: 520 }}>
         <div className="card-body">
           <h4 className="fw-bold mb-3">Create account</h4>
-
           <form onSubmit={handleSubmit} noValidate>
 
             <div className="mb-3 text-center">
@@ -128,11 +106,9 @@ const RegisterPage = () => {
             <InputField label="Username" id="userName" name="userName"
               type="text" placeholder="Enter your Username"
               value={form.userName} onChange={handleChange} error={errors.userName} />
-
             <InputField label="Email" id="email" name="email"
               type="email" placeholder="Enter your Email"
               value={form.email} onChange={handleChange} error={errors.email} />
-
             <InputField label="Phone" id="phone" name="phone"
               type="tel" placeholder="10-digit number"
               value={form.phone} onChange={handleChange} error={errors.phone} />
@@ -153,7 +129,6 @@ const RegisterPage = () => {
             <InputField label="Password" id="password" name="password"
               type="password" placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
               value={form.password} onChange={handleChange} error={errors.password} />
-
             <InputField label="Confirm Password" id="confirmPassword" name="confirmPassword"
               type="password" placeholder="Repeat your password"
               value={form.confirmPassword} onChange={handleChange} error={errors.confirmPassword} />

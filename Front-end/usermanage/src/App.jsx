@@ -6,12 +6,17 @@ import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppNavbar from "./components/AppNavbar";
 
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import UserDashboard from "./pages/UserDashboard";
-import AdminLoginPage from "./pages/AdminLoginPage";
-import AdminDashboard from "./pages/AdminDashboard";
-import Unauthorized from "./pages/Unauthorized";
+// User pages
+import LoginPage from "./modules/user/pages/LoginPage";
+import RegisterPage from "./modules/user/pages/RegisterPage";
+import ForgotPasswordPage from "./modules/user/pages/ForgotPasswordPage";
+import UserDashboard from "./modules/user/pages/UserDashboard";
+
+// Admin pages
+import AdminLoginPage from "./modules/admin/pages/AdminLoginPage";
+import AdminDashboard from "./modules/admin/pages/AdminDashboard";
+
+import Unauthorized from "./components/Unauthorized";
 
 const Layout = ({ children }) => (
   <>
@@ -44,13 +49,13 @@ const App = () => (
       <Routes>
         <Route path="/login" element={<Layout><LoginPage /></Layout>} />
         <Route path="/register" element={<Layout><RegisterPage /></Layout>} />
-        <Route path="/admin/login" element={<Layout><AdminLoginPage /></Layout>} />
-        <Route path="/unauthorized" element={<Layout><Unauthorized /></Layout>} />
+        <Route path="/forgot-password" element={<Layout><ForgotPasswordPage /></Layout>} />
 
         <Route path="/dashboard" element={<UserRoute><UserDashboard /></UserRoute>} />
         <Route path="/edit-profile" element={<UserRoute><UserDashboard /></UserRoute>} />
         <Route path="/change-password" element={<UserRoute><UserDashboard /></UserRoute>} />
 
+        <Route path="/admin/login" element={<Layout><AdminLoginPage /></Layout>} />
         <Route path="/admin/dashboard" element={
           <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
             <Layout><AdminDashboard /></Layout>
@@ -72,6 +77,7 @@ const App = () => (
           </ProtectedRoute>
         } />
 
+        <Route path="/unauthorized" element={<Layout><Unauthorized /></Layout>} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

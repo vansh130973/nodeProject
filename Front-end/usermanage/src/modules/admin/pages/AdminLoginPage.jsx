@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { useAuth } from "../context/AuthContext";
-import { apiLoginAdmin, showApiError } from "../services/api";
-import InputField from "../components/InputField";
+import { useAuth } from "../../../context/AuthContext";
+import { apiLoginAdmin } from "../services/admin.service";
+import { validateAdminLoginForm } from "../validations/admin.validation";
+import { showApiError } from "../../../utils/api";
+import InputField from "../../../components/InputField";
 
 const AdminLoginPage = () => {
   const { login } = useAuth();
@@ -17,16 +19,9 @@ const AdminLoginPage = () => {
     setErrors((prev) => ({ ...prev, [e.target.name]: "" }));
   };
 
-  const validate = () => {
-    const errs = {};
-    if (!form.userName.trim()) errs.userName = "Username is required";
-    if (!form.password.trim()) errs.password = "Password is required";
-    return errs;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const errs = validate();
+    const errs = validateAdminLoginForm(form);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setLoading(true);
@@ -43,12 +38,9 @@ const AdminLoginPage = () => {
     } catch (err) {
       toast.dismiss(toastId);
       const msg = err.message || "";
-      if (msg.toLowerCase().includes("username"))
-        setErrors({ userName: msg });
-      else if (msg.toLowerCase().includes("password"))
-        setErrors({ password: msg });
-      else
-        showApiError(err, (m) => toast.error(m));
+      if (msg.toLowerCase().includes("username")) setErrors({ userName: msg });
+      else if (msg.toLowerCase().includes("password")) setErrors({ password: msg });
+      else showApiError(err, (m) => toast.error(m));
     } finally {
       setLoading(false);
     }
@@ -59,23 +51,19 @@ const AdminLoginPage = () => {
       <div className="card shadow-sm border-0 rounded-4 p-4" style={{ width: "100%", maxWidth: 420 }}>
         <div className="card-body">
           <h4 className="fw-bold mb-4">Admin Login</h4>
-
           <form onSubmit={handleSubmit} noValidate>
             <InputField label="Username" id="userName" name="userName"
               type="text" placeholder="Enter admin username"
-              value={form.userName} onChange={handleChange}
-              error={errors.userName} />
-
+              value={form.userName} onChange={handleChange} error={errors.userName} />
             <InputField label="Password" id="password" name="password"
               type="password" placeholder="Enter your password"
-              value={form.password} onChange={handleChange}
-              error={errors.password} />
-
+              value={form.password} onChange={handleChange} error={errors.password} />
             <button type="submit" disabled={loading} className="btn btn-warning w-100 mt-2 fw-semibold">
-              {loading ? <><span className="spinner-border spinner-border-sm me-2" />Signing in...</> : "Admin Sign In"}
+              {loading
+                ? <><span className="spinner-border spinner-border-sm me-2" />Signing in...</>
+                : "Admin Sign In"}
             </button>
           </form>
-
           <hr className="my-3" />
           <p className="text-center small text-muted mb-0">
             User?{" "}
