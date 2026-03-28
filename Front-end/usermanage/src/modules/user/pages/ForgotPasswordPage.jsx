@@ -173,7 +173,7 @@ const ResetStep = ({ email, otp, onDone }) => {
         type="password" placeholder="Repeat your new password"
         value={form.confirmNewPassword} onChange={handleChange} error={errors.confirmNewPassword}
       />
-      <button type="submit" disabled={loading} className="btn btn-success w-100 fw-semibold">
+      <button type="submit" disabled={loading} className="btn btn-warning w-100 fw-semibold">
         {loading ? <><span className="spinner-border spinner-border-sm me-2" />Resetting...</> : "Reset Password"}
       </button>
     </form>

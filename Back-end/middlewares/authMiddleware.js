@@ -22,7 +22,7 @@ export const authenticate = async (req, res, next) => {
       : await findUserToken(token);  
 
     if (!savedToken) {
-      return sendErrorResponse(res, "Session expired. Please log in again.", 401);
+      return sendErrorResponse(res, "Session expired. Please log in again.", 200);
     }
 
     req.user = decoded;
