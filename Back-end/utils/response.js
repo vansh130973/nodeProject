@@ -1,5 +1,7 @@
-export const sendSuccessResponse = (res, message, data = {}, token = null) => {
-  return res.json({ success: true, message, token, ...data });
+export const sendSuccessResponse = (res, message, data = {}, token = null, statusCode = 200) => {
+  const payload = { success: true, message };
+  if (token !== null) payload.token = token;
+  return res.status(statusCode).json({ ...payload, ...data });
 };
 
 export const sendErrorResponse = (res, message, statusCode = 400) => {

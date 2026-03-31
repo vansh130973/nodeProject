@@ -41,3 +41,13 @@ export const loginAdminSchema = Joi.object({
   userName: Joi.string().required(),
   password: Joi.string().required(),
 });
+
+export const updateUserStatusSchema = Joi.object({
+  status: Joi.string()
+    .valid("active", "pending", "inactive")
+    .required()
+    .messages({
+      "any.only": "Status must be one of: active, pending, inactive",
+      "string.empty": "Status is required",
+    }),
+});

@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { useAuth } from "../../../context/AuthContext";
-import { apiRegisterUser, apiLoginUser } from "../services/user.service";
+import { apiRegisterUser } from "../services/user.service";
 import { validateRegisterForm } from "../validations/user.validation";
 import { showApiError } from "../../../utils/api";
 import InputField from "../../../components/InputField";
@@ -13,14 +12,35 @@ const INITIAL = {
   password: "", confirmPassword: "",
 };
 
+// Shown after successful registration
+const PendingScreen = ({ userName }) => (
+  <div className="min-vh-100 bg-light d-flex align-items-center justify-content-center py-5">
+    <div className="card shadow-sm border-0 rounded-4 p-4 text-center" style={{ width: "100%", maxWidth: 480 }}>
+      <div className="card-body">
+        <div className="mb-3" style={{ fontSize: 56 }}>⏳</div>
+        <h4 className="fw-bold mb-2">Account Created!</h4>
+        <p className="text-muted mb-1">
+          Welcome, <strong>@{userName}</strong>. Your account is currently{" "}
+          <span className="badge bg-warning text-dark">Pending Approval</span>.
+        </p>
+        <p className="text-muted small mb-4">
+          An admin will review your account and activate it. You'll be able to log in once approved.
+        </p>
+        <Link to="/login" className="btn btn-warning fw-semibold px-4">
+          Go to Login
+        </Link>
+      </div>
+    </div>
+  </div>
+);
+
 const RegisterPage = () => {
-  const navigate = useNavigate();
-  const { login } = useAuth();
   const [form, setForm] = useState(INITIAL);
   const [errors, setErrors] = useState({});
   const [profilePicture, setProfilePicture] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [registered, setRegistered] = useState(null); // userName after success
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -50,18 +70,15 @@ const RegisterPage = () => {
     const toastId = toast.loading("Creating your account...");
     try {
       await apiRegisterUser(formData);
-      const loginData = await apiLoginUser({ userName: form.userName, password: form.password });
-      login(loginData.token);
-      const decoded = JSON.parse(atob(loginData.token.split(".")[1]));
       toast.update(toastId, {
-        render: `Welcome, ${decoded.userName}!`,
-        type: "success", isLoading: false, autoClose: 3000,
+        render: "Account created! Awaiting admin approval.",
+        type: "success", isLoading: false, autoClose: 4000,
       });
-      navigate("/dashboard");
+      setRegistered(form.userName);
     } catch (err) {
       toast.dismiss(toastId);
       const msg = err.message || "";
-      if (msg.toLowerCase().includes("email")) setErrors((p) => ({ ...p, email: msg }));
+      if (msg.toLowerCase().includes("email"))         setErrors((p) => ({ ...p, email: msg }));
       else if (msg.toLowerCase().includes("username")) setErrors((p) => ({ ...p, userName: msg }));
       else showApiError(err, (m) => toast.error(m));
     } finally {
@@ -69,11 +86,16 @@ const RegisterPage = () => {
     }
   };
 
+  if (registered) return <PendingScreen userName={registered} />;
+
   return (
     <div className="min-vh-100 bg-light d-flex align-items-center justify-content-center py-5">
       <div className="card shadow-sm border-0 rounded-4 p-4" style={{ width: "100%", maxWidth: 520 }}>
         <div className="card-body">
-          <h4 className="fw-bold mb-3">Create account</h4>
+          <h4 className="fw-bold mb-1">Create account</h4>
+          <p className="text-muted small mb-3">
+            After registering, your account will need admin approval before you can log in.
+          </p>
           <form onSubmit={handleSubmit} noValidate>
 
             <div className="mb-3 text-center">

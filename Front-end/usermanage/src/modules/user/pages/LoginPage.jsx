@@ -13,10 +13,12 @@ const LoginPage = () => {
   const [form, setForm] = useState({ userName: "", password: "" });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [statusNotice, setStatusNotice] = useState(null); // "pending" | "inactive"
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     setErrors((prev) => ({ ...prev, [e.target.name]: "" }));
+    setStatusNotice(null);
   };
 
   const handleSubmit = async (e) => {
@@ -37,10 +39,18 @@ const LoginPage = () => {
       navigate("/dashboard");
     } catch (err) {
       toast.dismiss(toastId);
-      const msg = err.message || "";
-      if (msg.toLowerCase().includes("username")) setErrors({ userName: msg });
-      else if (msg.toLowerCase().includes("password")) setErrors({ password: msg });
-      else showApiError(err, (m) => toast.error(m));
+      const msg = (err.message || "").toLowerCase();
+      if (msg.includes("pending")) {
+        setStatusNotice("pending");
+      } else if (msg.includes("deactivated") || msg.includes("inactive")) {
+        setStatusNotice("inactive");
+      } else if (msg.includes("username")) {
+        setErrors({ userName: err.message });
+      } else if (msg.includes("password")) {
+        setErrors({ password: err.message });
+      } else {
+        showApiError(err, (m) => toast.error(m));
+      }
     } finally {
       setLoading(false);
     }
@@ -51,6 +61,26 @@ const LoginPage = () => {
       <div className="card shadow-sm border-0 rounded-4 p-4" style={{ width: "100%", maxWidth: 420 }}>
         <div className="card-body">
           <h4 className="fw-bold mb-4">User Login</h4>
+
+          {statusNotice === "pending" && (
+            <div className="alert alert-warning d-flex align-items-start gap-2 py-2 px-3 mb-3" role="alert">
+              <i className="bi bi-hourglass-split mt-1 flex-shrink-0" />
+              <div>
+                <strong>Account Pending Approval</strong>
+                <div className="small">Your account is awaiting admin activation. Please check back later.</div>
+              </div>
+            </div>
+          )}
+          {statusNotice === "inactive" && (
+            <div className="alert alert-danger d-flex align-items-start gap-2 py-2 px-3 mb-3" role="alert">
+              <i className="bi bi-slash-circle mt-1 flex-shrink-0" />
+              <div>
+                <strong>Account Deactivated</strong>
+                <div className="small">Your account has been deactivated. Please contact support.</div>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} noValidate>
             <InputField label="Username" id="userName" name="userName"
               type="text" placeholder="Enter your username"
@@ -60,12 +90,10 @@ const LoginPage = () => {
               <div className="d-flex justify-content-between align-items-center mb-1">
                 <label htmlFor="password" className="form-label fw-semibold mb-0">Password</label>
               </div>
-              <input
-                id="password" name="password" type="password"
+              <input id="password" name="password" type="password"
                 placeholder="Enter your password"
                 className={`form-control ${errors.password ? "is-invalid" : ""}`}
-                value={form.password} onChange={handleChange}
-              />
+                value={form.password} onChange={handleChange} />
               {errors.password && <div className="invalid-feedback">{errors.password}</div>}
             </div>
 
@@ -73,6 +101,7 @@ const LoginPage = () => {
               {loading ? <><span className="spinner-border spinner-border-sm me-2" />Signing in...</> : "Sign In"}
             </button>
           </form>
+
           <hr className="my-3" />
           <p className="text-center small mb-1">
             Don't have an account?{" "}
@@ -85,7 +114,6 @@ const LoginPage = () => {
           <p className="text-center small text-muted">
             <Link to="/forgot-password" className="text-decoration-none small text-danger fw-semibold">Forgot password?</Link>
           </p>
-          
         </div>
       </div>
     </div>

@@ -1,8 +1,9 @@
 import db from "../../../config/db.js";
 
-export const findUserByEmailOrUsername = async (email, userName) => {
+// Registration: allow if username doesn't exist OR only exists as deleted
+export const findActiveUserByEmailOrUsername = async (email, userName) => {
   const [result] = await db.query(
-    "SELECT * FROM users WHERE email = ? OR userName = ?",
+    "SELECT * FROM users WHERE (email = ? OR userName = ?) AND status != 'deleted'",
     [email, userName]
   );
   return result;
@@ -10,7 +11,7 @@ export const findUserByEmailOrUsername = async (email, userName) => {
 
 export const findUserByUsername = async (userName) => {
   const [result] = await db.query(
-    "SELECT * FROM users WHERE userName = ?",
+    "SELECT * FROM users WHERE userName = ? AND status != 'deleted'",
     [userName]
   );
   return result[0] ?? null;
@@ -18,7 +19,7 @@ export const findUserByUsername = async (userName) => {
 
 export const findUserByEmail = async (email) => {
   const [result] = await db.query(
-    "SELECT * FROM users WHERE email = ?",
+    "SELECT * FROM users WHERE email = ? AND status != 'deleted'",
     [email]
   );
   return result[0] ?? null;
@@ -36,10 +37,18 @@ export const insertUser = async (
   firstName, lastName, userName, password, email, phone, gender, profilePicture
 ) => {
   const [result] = await db.query(
-    "INSERT INTO users (firstName, lastName, userName, password, email, phone, gender, profilePicture) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO users (firstName, lastName, userName, password, email, phone, gender, profilePicture, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
     [firstName, lastName, userName, password, email, phone, gender, profilePicture]
   );
-  return { id: result.insertId, firstName, lastName, userName, email, phone, gender, profilePicture };
+  return { id: result.insertId, firstName, lastName, userName, email, phone, gender, profilePicture, status: "pending" };
+};
+
+// Update only the profilePicture column — used right after insertUser to set the final path
+export const updateProfilePicture = async (id, profilePicture) => {
+  await db.query(
+    "UPDATE users SET profilePicture = ?, updatedAt = NOW() WHERE id = ?",
+    [profilePicture, id]
+  );
 };
 
 export const updateUserProfile = async (id, firstName, lastName, phone, gender, profilePicture) => {
@@ -76,6 +85,13 @@ export const deleteUserToken = async (token) => {
   await db.query(
     "DELETE FROM userToken WHERE token = ?",
     [token]
+  );
+};
+
+export const deleteAllUserTokens = async (userId) => {
+  await db.query(
+    "DELETE FROM userToken WHERE userId = ?",
+    [userId]
   );
 };
 

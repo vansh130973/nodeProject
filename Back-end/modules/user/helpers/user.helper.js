@@ -9,13 +9,9 @@ export const formatUserData = (user) => ({
   phone: user.phone,
   gender: user.gender ?? null,
   profilePicture: user.profilePicture ?? null,
+  status: user.status,
   role: "USER",
 });
-
-export const resolveProfilePicture = (file, fallback = null) => {
-  if (file) return `uploads/profiles/${file.filename}`;
-  return fallback ?? null;
-};
 
 export const generateOtp = () =>
   Math.floor(100000 + Math.random() * 900000).toString();

@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import {
-  findUserByEmailOrUsername,
+  findActiveUserByEmailOrUsername,
   insertUser,
   findUserByUsername,
   findUserByEmail,
@@ -13,21 +13,25 @@ import {
   saveOtp,
   findOtpByUserId,
   deleteOtp,
+  updateProfilePicture,
 } from "../models/user.model.js";
 import {
   formatUserData,
-  resolveProfilePicture,
   generateOtp,
   otpExpiryTime,
   sendOtpEmail,
 } from "../helpers/user.helper.js";
+import { moveToUserFolder } from "../../../middlewares/upload.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
+
+// ─── Register ─────────────────────────────────────────────────────────────────
 
 export const registerUser = async (req, res) => {
   try {
     const { firstName, lastName, userName, password, email, phone, gender } = req.body;
 
-    const existingUsers = await findUserByEmailOrUsername(email, userName);
+    // Block if non-deleted user already exists with same email or username
+    const existingUsers = await findActiveUserByEmailOrUsername(email, userName);
     if (existingUsers.length > 0) {
       if (existingUsers.some((u) => u.email === email))
         return sendErrorResponse(res, "Email already registered", 409);
@@ -35,22 +39,34 @@ export const registerUser = async (req, res) => {
         return sendErrorResponse(res, "Username already taken", 409);
     }
 
-    const profilePicture = resolveProfilePicture(req.file);
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Insert with null profilePicture first — we need the userId for the folder name
     const newUser = await insertUser(
-      firstName, lastName, userName, hashedPassword, email, phone, gender, profilePicture
+      firstName, lastName, userName, hashedPassword, email, phone, gender, null
     );
 
-    const token = jwt.sign(formatUserData(newUser), process.env.JWT_SECRET, { expiresIn: "1h" });
-    await saveUserToken(newUser.id, token);
+    // Now move uploaded file to uploads/{userId}/profile.ext and update DB
+    if (req.file) {
+      const picturePath = await moveToUserFolder(req.file, newUser.id);
+      await updateProfilePicture(newUser.id, picturePath);
+      newUser.profilePicture = picturePath;
+    }
 
-    return sendSuccessResponse(res, "User registered successfully", null, token, 201);
+    return sendSuccessResponse(
+      res,
+      "Registration successful. Your account is pending admin approval before you can log in.",
+      { data: formatUserData(newUser) },
+      null,
+      201
+    );
   } catch (error) {
     console.error("registerUser error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
+
+// ─── Login ────────────────────────────────────────────────────────────────────
 
 export const loginUser = async (req, res) => {
   try {
@@ -58,6 +74,13 @@ export const loginUser = async (req, res) => {
 
     const user = await findUserByUsername(userName);
     if (!user) return sendErrorResponse(res, "Invalid username.", 401);
+
+    if (user.status === "pending")
+      return sendErrorResponse(res, "Your account is pending admin approval.", 403);
+    if (user.status === "inactive")
+      return sendErrorResponse(res, "Your account has been deactivated. Contact support.", 403);
+    if (user.status !== "active")
+      return sendErrorResponse(res, "Access denied.", 403);
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return sendErrorResponse(res, "Invalid password.", 401);
@@ -72,6 +95,8 @@ export const loginUser = async (req, res) => {
   }
 };
 
+// ─── Logout ───────────────────────────────────────────────────────────────────
+
 export const logoutUser = async (req, res) => {
   try {
     await deleteUserToken(req.token);
@@ -81,6 +106,8 @@ export const logoutUser = async (req, res) => {
     return sendErrorResponse(res, "Server error");
   }
 };
+
+// ─── Dashboard / Profile ──────────────────────────────────────────────────────
 
 export const getDashboard = async (req, res) => {
   try {
@@ -104,14 +131,23 @@ export const getUserProfile = async (req, res) => {
   }
 };
 
+// ─── Update Profile ───────────────────────────────────────────────────────────
+
 export const updateProfile = async (req, res) => {
   try {
     const { firstName, lastName, phone, gender } = req.body;
-    const profilePicture = resolveProfilePicture(req.file, req.body.profilePicture);
+    const userId = req.user.id;
 
-    const updatedUser = await updateUserProfile(
-      req.user.id, firstName, lastName, phone, gender, profilePicture
-    );
+    // Fetch current pic so we can keep it if no new file uploaded
+    const currentUser = await findUserById(userId);
+    let profilePicture = currentUser?.profilePicture ?? null;
+
+    if (req.file) {
+      // Move new file to uploads/{userId}/profile.ext (replaces old one)
+      profilePicture = await moveToUserFolder(req.file, userId);
+    }
+
+    const updatedUser = await updateUserProfile(userId, firstName, lastName, phone, gender, profilePicture);
 
     return sendSuccessResponse(res, "Profile updated successfully", { data: formatUserData(updatedUser) }, null, 200);
   } catch (error) {
@@ -137,6 +173,8 @@ export const changePassword = async (req, res) => {
   }
 };
 
+// ─── Forgot / Verify OTP / Reset Password ─────────────────────────────────────
+
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -147,7 +185,7 @@ export const forgotPassword = async (req, res) => {
     }
 
     const otp = generateOtp();
-    const expiresAt = otpExpiryTime(10); // valid for 10 minutes
+    const expiresAt = otpExpiryTime(10);
 
     await saveOtp(user.id, otp, expiresAt);
     await sendOtpEmail(email, otp);
@@ -170,7 +208,7 @@ export const verifyOtp = async (req, res) => {
     if (!record) return sendErrorResponse(res, "OTP not found. Please request a new one.", 400);
 
     if (new Date() > new Date(record.expiresAt))
-      return sendErrorResponse(res, "OTP has expired. Please try Again.", 400);
+      return sendErrorResponse(res, "OTP has expired. Please try again.", 400);
 
     if (record.otp !== otp)
       return sendErrorResponse(res, "Invalid OTP.", 400);
