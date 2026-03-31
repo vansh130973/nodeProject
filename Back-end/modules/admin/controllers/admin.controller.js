@@ -14,6 +14,7 @@ import {
   getDashboardCounts,
   saveAdminToken,
   deleteAdminToken,
+  updateUserByAdmin,
 } from "../models/admin.model.js";
 import { formatAdminData } from "../helpers/admin.helper.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
@@ -198,6 +199,36 @@ export const logoutUserByAdmin = async (req, res) => {
     return sendSuccessResponse(res, "User logged out successfully", null, null, 200);
   } catch (error) {
     console.error("logoutUserByAdmin error:", error);
+    return sendErrorResponse(res, "Server error", 500);
+  }
+};
+
+
+// ─── Admin edit user ──────────────────────────────────────────────────────────
+
+export const editUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { firstName, lastName, email, phone, gender, password } = req.body;
+
+    const user = await findUserByIdAdmin(id);
+    if (!user) return sendErrorResponse(res, "User not found", 404);
+    if (user.status === "deleted") return sendErrorResponse(res, "Cannot edit a deleted user", 400);
+
+    let hashedPassword = null;
+    if (password && password.trim()) {
+      const bcrypt = await import("bcrypt");
+      hashedPassword = await bcrypt.default.hash(password, 10);
+    }
+
+    const updated = await updateUserByAdmin(id, {
+      firstName, lastName, email, phone, gender,
+      password: hashedPassword,
+    });
+
+    return sendSuccessResponse(res, "User updated successfully", { user: updated }, null, 200);
+  } catch (error) {
+    console.error("editUser error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };

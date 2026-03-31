@@ -20,25 +20,27 @@ export const apiAddAdmin = (body) =>
     body: JSON.stringify(body),
   }).then(handleResponse);
 
-// Dashboard — single API, returns all counts
+// Single API for all dashboard counts
 export const apiGetDashboard = () =>
   fetch(`${BASE_URL}/admin/dashboard`, {
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
-// User listing with pagination  ?page=1&limit=10
+// User listing with pagination
 export const apiGetAllUsers = ({ page = 1, limit = 10 } = {}) =>
   fetch(`${BASE_URL}/admin/users?page=${page}&limit=${limit}`, {
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
-// Single user
-export const apiGetUserById = (id) =>
+// Edit user — all fields + optional password in one call
+export const apiEditUser = (id, body) =>
   fetch(`${BASE_URL}/admin/users/${id}`, {
+    method: "PUT",
     headers: getAuthHeaders(),
+    body: JSON.stringify(body),
   }).then(handleResponse);
 
-// Update status: status = "active" | "inactive" | "pending"
+// Update status only
 export const apiUpdateUserStatus = (id, status) =>
   fetch(`${BASE_URL}/admin/users/${id}/status`, {
     method: "PATCH",

@@ -10,6 +10,7 @@ import {
   deleteUser,
   logoutUserByAdmin,
   showAllAdmins,
+  editUser,
 } from "./controllers/admin.controller.js";
 import { validate } from "../../middlewares/validate.js";
 import { authenticate, roleCheck } from "../../middlewares/authMiddleware.js";
@@ -17,13 +18,14 @@ import {
   addAdminSchema,
   loginAdminSchema,
   updateUserStatusSchema,
+  editUserSchema,
 } from "./validations/admin.validation.js";
 
 const router = express.Router();
 
 // Auth
-router.post("/login",  validate(loginAdminSchema), loginAdmin);
-router.post("/logout", authenticate, logoutAdmin);
+router.post("/login",   validate(loginAdminSchema), loginAdmin);
+router.post("/logout",  authenticate, logoutAdmin);
 
 // Dashboard — single API for all counts
 router.get("/dashboard", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), getDashboard);
@@ -43,6 +45,9 @@ router.patch("/users/:id/status", authenticate, roleCheck("MASTER_ADMIN", "ADMIN
 
 // Soft delete
 router.delete("/users/:id", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), deleteUser);
+
+// Edit user (all fields + optional password)
+router.put("/users/:id", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), validate(editUserSchema), editUser);
 
 // Force logout user
 router.post("/users/:id/logout", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), logoutUserByAdmin);

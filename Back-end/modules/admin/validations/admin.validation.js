@@ -51,3 +51,35 @@ export const updateUserStatusSchema = Joi.object({
       "string.empty": "Status is required",
     }),
 });
+
+export const editUserSchema = Joi.object({
+  firstName: Joi.string().min(2).max(50).required().messages({
+    "string.empty": "First name is required",
+  }),
+  lastName: Joi.string().min(2).max(50).required().messages({
+    "string.empty": "Last name is required",
+  }),
+  email: Joi.string().email().required().messages({
+    "string.empty": "Email is required",
+    "string.email": "Invalid email format",
+  }),
+  phone: Joi.string().length(10).pattern(/^[0-9]+$/).required().messages({
+    "string.empty": "Phone is required",
+    "string.length": "Phone must be exactly 10 digits",
+    "string.pattern.base": "Phone must contain only numbers",
+  }),
+  gender: Joi.string().valid("male", "female", "other").required().messages({
+    "any.only": "Gender must be male, female or other",
+  }),
+  // Password is optional — only hashed & updated if provided
+  password: Joi.string()
+    .allow("", null)
+    .optional()
+    .when(Joi.string().min(1), {
+      then: Joi.string()
+        .pattern(/^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/)
+        .messages({
+          "string.pattern.base": "Password must be 8+ chars with 1 uppercase, 1 number, 1 special character",
+        }),
+    }),
+});

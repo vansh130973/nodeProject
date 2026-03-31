@@ -90,6 +90,7 @@ export const softDeleteUser = async (id) => {
     "UPDATE users SET status = 'deleted', updatedAt = NOW() WHERE id = ?",
     [id]
   );
+  // Invalidate all active tokens
   await db.query("DELETE FROM userToken WHERE userId = ?", [id]);
 };
 
@@ -121,6 +122,24 @@ export const getDashboardCounts = async () => {
      FROM users`
   );
   return counts;
+};
+
+
+// ─── Admin edit user (all fields + optional password) ────────────────────────
+
+export const updateUserByAdmin = async (id, { firstName, lastName, email, phone, gender, password }) => {
+  if (password) {
+    await db.query(
+      "UPDATE users SET firstName=?, lastName=?, email=?, phone=?, gender=?, password=?, updatedAt=NOW() WHERE id=?",
+      [firstName, lastName, email, phone, gender, password, id]
+    );
+  } else {
+    await db.query(
+      "UPDATE users SET firstName=?, lastName=?, email=?, phone=?, gender=?, updatedAt=NOW() WHERE id=?",
+      [firstName, lastName, email, phone, gender, id]
+    );
+  }
+  return findUserByIdAdmin(id);
 };
 
 // ─── Token management ─────────────────────────────────────────────────────────
