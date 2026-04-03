@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
@@ -7,27 +7,39 @@ import { showApiError } from "../../../utils/api";
 
 const useAdminData = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
-  const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 10, totalPages: 1 });
-  const [admins, setAdmins] = useState([]);
+  const navigate  = useNavigate();
+  const didInit   = useRef(false); // prevent re-firing when navigate reference changes
+
+  const [users, setUsers]               = useState([]);
+  const [pagination, setPagination]     = useState({ total: 0, page: 1, limit: 10, totalPages: 1 });
+  const [admins, setAdmins]             = useState([]);
   const [dashboardCounts, setDashboardCounts] = useState(null);
 
-  // Fetch dashboard counts once on mount
   useEffect(() => {
+    // Redirect if not admin
     if (!user || !(user.role === "ADMIN" || user.role === "MASTER_ADMIN")) {
       navigate("/admin/login");
       return;
     }
+    if (didInit.current) return;
+    didInit.current = true;
+
+    // Dashboard counts
     apiGetDashboard()
       .then((res) => setDashboardCounts(res.data))
       .catch((err) => showApiError(err, (m) => toast.error(m)));
-  }, [user, navigate]);
 
-  // Fetch users for page
-  const fetchUsers = async (page = 1, limit = 10) => {
+    // Admins list — MASTER_ADMIN only, needed for "Total Admins" card on first load
+    if (user.role === "MASTER_ADMIN") {
+      apiGetAllAdmins()
+        .then((res) => setAdmins(res.admins))
+        .catch(() => {});
+    }
+  }, [user]);
+
+  const fetchUsers = async (page = 1, limit = 10, status = "", search = "") => {
     try {
-      const res = await apiGetAllUsers({ page, limit });
+      const res = await apiGetAllUsers({ page, limit, status, search });
       setUsers(res.users);
       setPagination(res.pagination);
     } catch (err) {
@@ -35,7 +47,6 @@ const useAdminData = () => {
     }
   };
 
-  // Fetch admins (MASTER_ADMIN only)
   const fetchAdmins = async () => {
     if (user?.role !== "MASTER_ADMIN") return;
     try {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
 import {
@@ -8,20 +8,38 @@ import {
   apiLogoutUser,
 } from "../services/user.service";
 import { validateEditProfileForm, validateChangePasswordForm } from "../validations/user.validation";
-import { showApiError, BASE_URL } from "../../../utils/api";
+import { showApiError } from "../../../utils/api";
 import useUserProfile from "../hooks/useUserProfile";
 import InputField from "../../../components/InputField";
 import "bootstrap-icons/font/bootstrap-icons.css";
+
+// Session killed screen
+const SessionKilledScreen = () => (
+  <div className="min-vh-100 bg-light d-flex align-items-center justify-content-center">
+    <div className="card border-0 shadow-sm rounded-4 p-4 text-center" style={{ maxWidth: 460 }}>
+      <div className="card-body">
+        <div className="mb-3" style={{ fontSize: 52 }}>🔒</div>
+        <h5 className="fw-bold mb-2">Session Ended</h5>
+        <p className="text-muted mb-4">
+          Admin has logged you out. Please log in again to access your dashboard.
+        </p>
+        <Link to="/login" className="btn btn-warning fw-semibold px-5">
+          Go to Login
+        </Link>
+      </div>
+    </div>
+  </div>
+);
 
 const UserDashboard = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { profile, setProfile } = useUserProfile();
+  const { profile, setProfile, sessionKilled, guardedCall } = useUserProfile();
 
   const getActiveTab = () => {
-    if (pathname === "/dashboard") return "profile";
-    if (pathname === "/edit-profile") return "edit";
+    if (pathname === "/dashboard")       return "profile";
+    if (pathname === "/edit-profile")    return "edit";
     if (pathname === "/change-password") return "password";
     return "profile";
   };
@@ -37,24 +55,27 @@ const UserDashboard = () => {
   const [pwErrors, setPwErrors] = useState({});
   const [pwLoading, setPwLoading] = useState(false);
 
-  // Sync editForm when profile loads
+  // Sync editForm once profile loads
   if (profile && !editForm.firstName && profile.firstName) {
     setEditForm({
       firstName: profile.firstName,
-      lastName: profile.lastName,
-      phone: profile.phone,
-      gender: profile.gender ?? "",
+      lastName:  profile.lastName,
+      phone:     profile.phone,
+      gender:    profile.gender ?? "",
     });
   }
 
+  // If session was killed by admin — show dedicated screen, no redirect
+  if (sessionKilled) return <SessionKilledScreen />;
+
   const handleEditChange = (e) => {
-    setEditForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-    setEditErrors((prev) => ({ ...prev, [e.target.name]: "" }));
+    setEditForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+    setEditErrors((p) => ({ ...p, [e.target.name]: "" }));
   };
 
   const handlePwChange = (e) => {
-    setPwForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-    setPwErrors((prev) => ({ ...prev, [e.target.name]: "" }));
+    setPwForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+    setPwErrors((p) => ({ ...p, [e.target.name]: "" }));
   };
 
   const handleImageChange = (e) => {
@@ -65,23 +86,28 @@ const UserDashboard = () => {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     const errs = validateEditProfileForm(editForm);
-    if (Object.keys(errs).length > 0) { setEditErrors(errs); return; }
+    if (Object.keys(errs).length) { setEditErrors(errs); return; }
 
     const formData = new FormData();
     formData.append("firstName", editForm.firstName);
-    formData.append("lastName", editForm.lastName);
-    formData.append("phone", editForm.phone);
-    formData.append("gender", editForm.gender);
+    formData.append("lastName",  editForm.lastName);
+    formData.append("phone",     editForm.phone);
+    formData.append("gender",    editForm.gender);
     if (newImage) formData.append("profilePicture", newImage);
     else if (profile.profilePicture) formData.append("profilePicture", profile.profilePicture);
 
     setEditLoading(true);
     try {
-      const res = await apiUpdateUserProfile(formData);
-      setProfile(res.data);
-      setPreview(null); setNewImage(null);
-      toast.success("Profile updated successfully");
-      navigate("/dashboard");
+      await guardedCall(
+        () => apiUpdateUserProfile(formData),
+        (res) => {
+          setProfile(res.data);
+          setPreview(null);
+          setNewImage(null);
+          toast.success("Profile updated successfully");
+          navigate("/dashboard");
+        }
+      );
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
     } finally {
@@ -92,15 +118,19 @@ const UserDashboard = () => {
   const handlePwSubmit = async (e) => {
     e.preventDefault();
     const errs = validateChangePasswordForm(pwForm);
-    if (Object.keys(errs).length > 0) { setPwErrors(errs); return; }
+    if (Object.keys(errs).length) { setPwErrors(errs); return; }
 
     setPwLoading(true);
     try {
-      await apiChangePassword(pwForm);
-      toast.success("Password changed! Please login again.");
-      await apiLogoutUser().catch(() => {});
-      logout();
-      navigate("/login");
+      await guardedCall(
+        () => apiChangePassword(pwForm),
+        async () => {
+          toast.success("Password changed! Please login again.");
+          await apiLogoutUser().catch(() => {});
+          logout();
+          navigate("/login");
+        }
+      );
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
     } finally {
@@ -108,11 +138,8 @@ const UserDashboard = () => {
     }
   };
 
-  const imgSrc = preview
-    ? preview
-    : profile?.profilePicture
-    ? `${BASE_URL}/${profile.profilePicture}`
-    : null;
+  // profilePicture is now a full URL from the server
+  const imgSrc = preview ?? profile?.profilePicture ?? null;
 
   const Sidebar = () => (
     <div className="d-flex flex-column bg-dark text-white"
@@ -171,6 +198,7 @@ const UserDashboard = () => {
                     ["Email", profile.email],
                     ["Phone", profile.phone],
                     ["Gender", profile.gender ?? "—"],
+                    ["Status", profile.status],
                   ].map(([label, value]) => (
                     <div key={label} className="row mb-3">
                       <dt className="col-4 text-muted fw-normal small">{label}</dt>
@@ -258,13 +286,11 @@ const UserDashboard = () => {
                     <form onSubmit={handlePwSubmit} noValidate>
                       <InputField label="New Password" id="newPassword" name="newPassword"
                         type="password" placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
-                        value={pwForm.newPassword} onChange={handlePwChange}
-                        error={pwErrors.newPassword} />
+                        value={pwForm.newPassword} onChange={handlePwChange} error={pwErrors.newPassword} />
                       <div className="mb-4">
                         <InputField label="Confirm New Password" id="confirmNewPassword" name="confirmNewPassword"
                           type="password" placeholder="Repeat new password"
-                          value={pwForm.confirmNewPassword} onChange={handlePwChange}
-                          error={pwErrors.confirmNewPassword} />
+                          value={pwForm.confirmNewPassword} onChange={handlePwChange} error={pwErrors.confirmNewPassword} />
                       </div>
                       <button type="submit" disabled={pwLoading} className="btn btn-danger w-100 py-2 fw-semibold">
                         {pwLoading ? <><span className="spinner-border spinner-border-sm me-2" />Changing...</> : "Change Password"}

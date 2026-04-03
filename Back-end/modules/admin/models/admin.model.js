@@ -32,39 +32,77 @@ export const findAdminById = async (id) => {
   return result[0] ?? null;
 };
 
-// ─── User listing with pagination ────────────────────────────────────────────
+// User listing with pagination
 
-export const getUsersWithPagination = async (page = 1, limit = 10) => {
+export const getUsersWithPagination = async (page = 1, limit = 10, status = "", search = "") => {
   const offset = (page - 1) * limit;
+
+  // Build WHERE dynamically
+  const conditions = [];
+  const params = [];
+
+  if (status && status !== "all") {
+    conditions.push("status = ?");
+    params.push(status);
+  }
+  // "all" with no filter still hides deleted by default UNLESS admin explicitly picks "deleted"
+  if (!status || status === "all") {
+    conditions.push("status != 'deleted'");
+  }
+
+  if (search && search.trim()) {
+    conditions.push("(firstName LIKE ? OR lastName LIKE ? OR userName LIKE ? OR email LIKE ? OR phone LIKE ?)");
+    const like = `%${search.trim()}%`;
+    params.push(like, like, like, like, like);
+  }
+
+  const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
+
   const [rows] = await db.query(
     `SELECT
        id,
-       CONCAT(firstName, ' ', lastName, ' (', userName, ')') AS name,
        firstName,
        lastName,
        userName,
        phone,
        email,
+       gender,
        status,
        profilePicture,
        createdAt
      FROM users
-     WHERE status != 'deleted'
+     ${where}
      ORDER BY id DESC
      LIMIT ? OFFSET ?`,
-    [limit, offset]
+    [...params, limit, offset]
   );
   return rows;
 };
 
-export const getUsersCount = async () => {
-  const [[{ total }]] = await db.query(
-    "SELECT COUNT(*) AS total FROM users WHERE status != 'deleted'"
-  );
+export const getUsersCount = async (status = "", search = "") => {
+  const conditions = [];
+  const params = [];
+
+  if (status && status !== "all") {
+    conditions.push("status = ?");
+    params.push(status);
+  }
+  if (!status || status === "all") {
+    conditions.push("status != 'deleted'");
+  }
+
+  if (search && search.trim()) {
+    conditions.push("(firstName LIKE ? OR lastName LIKE ? OR userName LIKE ? OR email LIKE ? OR phone LIKE ?)");
+    const like = `%${search.trim()}%`;
+    params.push(like, like, like, like, like);
+  }
+
+  const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
+  const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total FROM users ${where}`, params);
   return total;
 };
 
-// ─── Single user ──────────────────────────────────────────────────────────────
+// Single user
 
 export const findUserByIdAdmin = async (id) => {
   const [result] = await db.query(
@@ -74,7 +112,7 @@ export const findUserByIdAdmin = async (id) => {
   return result[0] ?? null;
 };
 
-// ─── Status update ───────────────────────────────────────────────────────────
+// Status update
 
 export const updateUserStatus = async (id, status) => {
   await db.query(
@@ -83,7 +121,7 @@ export const updateUserStatus = async (id, status) => {
   );
 };
 
-// ─── Soft delete + kill all sessions ─────────────────────────────────────────
+// Soft delete + kill all sessions
 
 export const softDeleteUser = async (id) => {
   await db.query(
@@ -94,13 +132,13 @@ export const softDeleteUser = async (id) => {
   await db.query("DELETE FROM userToken WHERE userId = ?", [id]);
 };
 
-// ─── Force logout user (kill all sessions) ───────────────────────────────────
+// Force logout user (kill all sessions)
 
 export const forceLogoutUser = async (userId) => {
   await db.query("DELETE FROM userToken WHERE userId = ?", [userId]);
 };
 
-// ─── Admin listing ───────────────────────────────────────────────────────────
+// Admin listing
 
 export const getAllAdmins = async () => {
   const [result] = await db.query(
@@ -109,7 +147,7 @@ export const getAllAdmins = async () => {
   return result;
 };
 
-// ─── Dashboard counts (single query) ─────────────────────────────────────────
+// Dashboard counts (single query)
 
 export const getDashboardCounts = async () => {
   const [[counts]] = await db.query(
@@ -125,7 +163,7 @@ export const getDashboardCounts = async () => {
 };
 
 
-// ─── Admin edit user (all fields + optional password) ────────────────────────
+// Admin edit user (all fields + optional password)
 
 export const updateUserByAdmin = async (id, { firstName, lastName, email, phone, gender, password }) => {
   if (password) {
@@ -142,7 +180,7 @@ export const updateUserByAdmin = async (id, { firstName, lastName, email, phone,
   return findUserByIdAdmin(id);
 };
 
-// ─── Token management ─────────────────────────────────────────────────────────
+// Token management
 
 export const saveAdminToken = async (adminId, token) => {
   await db.query(

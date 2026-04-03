@@ -19,8 +19,6 @@ import {
 import { formatAdminData } from "../helpers/admin.helper.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
 
-// ─── Admin auth ───────────────────────────────────────────────────────────────
-
 export const addAdmin = async (req, res) => {
   try {
     const { userName, password, phone, email } = req.body;
@@ -79,8 +77,6 @@ export const logoutAdmin = async (req, res) => {
   }
 };
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
-
 export const getDashboard = async (req, res) => {
   try {
     const counts = await getDashboardCounts();
@@ -91,16 +87,18 @@ export const getDashboard = async (req, res) => {
   }
 };
 
-// ─── User listing with pagination ────────────────────────────────────────────
+// User listing with pagination
 
 export const showAllUsers = async (req, res) => {
   try {
-    const page  = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const page   = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const status = req.query.status || "";   // "active"|"inactive"|"pending"|"deleted"|"all"|""
+    const search = req.query.search || "";   // text search
 
     const [users, total] = await Promise.all([
-      getUsersWithPagination(page, limit),
-      getUsersCount(),
+      getUsersWithPagination(page, limit, status, search),
+      getUsersCount(status, search),
     ]);
 
     const totalPages = Math.ceil(total / limit);
@@ -122,7 +120,7 @@ export const showAllUsers = async (req, res) => {
   }
 };
 
-// ─── Single user (for edit) ───────────────────────────────────────────────────
+// Single user (for edit)
 
 export const getUserById = async (req, res) => {
   try {
@@ -135,7 +133,7 @@ export const getUserById = async (req, res) => {
   }
 };
 
-// ─── Update user status ───────────────────────────────────────────────────────
+// Update user status
 
 export const changeUserStatus = async (req, res) => {
   try {
@@ -153,7 +151,7 @@ export const changeUserStatus = async (req, res) => {
 
     await updateUserStatus(id, status);
 
-    // If deactivating/pending, kill all active sessions
+    // If deactivating/pending, remove token
     if (status !== "active") {
       await forceLogoutUser(id);
     }
@@ -165,7 +163,7 @@ export const changeUserStatus = async (req, res) => {
   }
 };
 
-// ─── Soft delete user ─────────────────────────────────────────────────────────
+// Soft delete user
 
 export const deleteUser = async (req, res) => {
   try {
@@ -185,7 +183,7 @@ export const deleteUser = async (req, res) => {
   }
 };
 
-// ─── Force logout user ────────────────────────────────────────────────────────
+// Force logout user
 
 export const logoutUserByAdmin = async (req, res) => {
   try {
@@ -204,7 +202,7 @@ export const logoutUserByAdmin = async (req, res) => {
 };
 
 
-// ─── Admin edit user ──────────────────────────────────────────────────────────
+// Admin edit user
 
 export const editUser = async (req, res) => {
   try {
@@ -233,7 +231,7 @@ export const editUser = async (req, res) => {
   }
 };
 
-// ─── Admin listing ────────────────────────────────────────────────────────────
+//Admin listing
 
 export const showAllAdmins = async (req, res) => {
   try {

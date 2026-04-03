@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
@@ -18,10 +18,10 @@ import InputField from "../../../components/InputField";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 const INITIAL_ADMIN_FORM = { userName: "", email: "", phone: "", password: "", conformPassword: "" };
-const EDIT_EMPTY = { firstName: "", lastName: "", email: "", phone: "", gender: "", password: "" };
 const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
+const STATUS_OPTIONS = ["all", "active", "inactive", "pending", "deleted"];
 
-// ── Status badge ──────────────────────────────────────────────────────────────
+// Status badge
 const StatusBadge = ({ status }) => {
   const map = {
     active:   { cls: "bg-success",          label: "Active"   },
@@ -33,7 +33,7 @@ const StatusBadge = ({ status }) => {
   return <span className={`badge ${cls}`}>{label}</span>;
 };
 
-// ── Pagination ────────────────────────────────────────────────────────────────
+// Pagination
 const Pagination = ({ pagination, onPageChange }) => {
   const { page, totalPages } = pagination;
   if (totalPages <= 1) return null;
@@ -56,7 +56,7 @@ const Pagination = ({ pagination, onPageChange }) => {
   );
 };
 
-// ── Confirm modal ─────────────────────────────────────────────────────────────
+// Confirm modal
 const ConfirmModal = ({ show, title, message, onConfirm, onCancel, danger = false }) => {
   if (!show) return null;
   return (
@@ -76,14 +76,14 @@ const ConfirmModal = ({ show, title, message, onConfirm, onCancel, danger = fals
   );
 };
 
-// ── Edit User Modal ───────────────────────────────────────────────────────────
+// Edit User Modal
 const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
   const [form, setForm] = useState({
     firstName: editTarget.firstName || "",
     lastName:  editTarget.lastName  || "",
     email:     editTarget.email     || "",
     phone:     editTarget.phone     || "",
-    gender:    editTarget.gender    || "",
+    gender:    editTarget.gender ?? "",
     password:  "",
   });
   const [errors, setErrors]   = useState({});
@@ -115,7 +115,6 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
 
     setLoading(true);
     try {
-      // Single PUT — backend handles password only if non-empty
       const payload = {
         firstName: form.firstName,
         lastName:  form.lastName,
@@ -126,7 +125,7 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
       };
       const res = await apiEditUser(editTarget.id, payload);
       toast.success("User updated successfully");
-      onSaved(res.user); // update row in parent without refetch
+      onSaved(res.user);
       onClose();
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
@@ -150,18 +149,18 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
           <form onSubmit={handleSubmit} noValidate>
             <div className="row g-3 mb-2">
               <div className="col-6">
-                <InputField label="First Name" id="firstName" name="firstName" type="text"
+                <InputField label="First Name" id="e_firstName" name="firstName" type="text"
                   value={form.firstName} onChange={handleChange} error={errors.firstName} />
               </div>
               <div className="col-6">
-                <InputField label="Last Name" id="lastName" name="lastName" type="text"
+                <InputField label="Last Name" id="e_lastName" name="lastName" type="text"
                   value={form.lastName} onChange={handleChange} error={errors.lastName} />
               </div>
             </div>
 
-            <InputField label="Email" id="email" name="email" type="email"
+            <InputField label="Email" id="e_email" name="email" type="email"
               value={form.email} onChange={handleChange} error={errors.email} />
-            <InputField label="Phone" id="phone" name="phone" type="tel"
+            <InputField label="Phone" id="e_phone" name="phone" type="tel"
               placeholder="10-digit number"
               value={form.phone} onChange={handleChange} error={errors.phone} />
 
@@ -169,7 +168,8 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
               <label className="form-label fw-semibold">Gender</label>
               <select name="gender"
                 className={`form-select ${errors.gender ? "is-invalid" : ""}`}
-                value={form.gender} onChange={handleChange}>
+                value={form.gender}
+                onChange={handleChange}>
                 <option value="">Select Gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
@@ -178,7 +178,6 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
               {errors.gender && <div className="invalid-feedback">{errors.gender}</div>}
             </div>
 
-            {/* Password — optional, only sent if filled */}
             <div className="mb-3">
               <div className="d-flex align-items-center justify-content-between mb-1">
                 <label className="form-label fw-semibold mb-0">New Password</label>
@@ -188,7 +187,7 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
                   {showPw ? "Hide" : "Set password"}
                 </button>
               </div>
-              {showPw && (
+              {showPw ? (
                 <>
                   <input type="password" name="password"
                     className={`form-control ${errors.password ? "is-invalid" : ""}`}
@@ -196,11 +195,10 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
                     value={form.password} onChange={handleChange} />
                   {errors.password
                     ? <div className="invalid-feedback">{errors.password}</div>
-                    : <div className="form-text text-muted">Leave blank to keep the existing password.</div>
+                    : <div className="form-text text-muted">Leave blank to keep existing password.</div>
                   }
                 </>
-              )}
-              {!showPw && (
+              ) : (
                 <div className="text-muted small">
                   <i className="bi bi-lock me-1" />Password unchanged unless you expand this.
                 </div>
@@ -208,9 +206,7 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
             </div>
 
             <div className="d-flex gap-2 pt-2">
-              <button type="button" className="btn btn-outline-secondary flex-fill" onClick={onClose}>
-                Cancel
-              </button>
+              <button type="button" className="btn btn-outline-secondary flex-fill" onClick={onClose}>Cancel</button>
               <button type="submit" disabled={loading} className="btn btn-warning flex-fill fw-semibold">
                 {loading ? <><span className="spinner-border spinner-border-sm me-2" />Saving...</> : "Save Changes"}
               </button>
@@ -222,17 +218,16 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
   );
 };
 
-// ── Status dropdown ───────────────────────────────────────────────────────────
+// Status dropdown
 const StatusDropdown = ({ userId, currentStatus, onChanged }) => {
   const [loading, setLoading] = useState(false);
-
   const handleChange = async (e) => {
     const newStatus = e.target.value;
     if (newStatus === currentStatus) return;
     setLoading(true);
     try {
       await apiUpdateUserStatus(userId, newStatus);
-      toast.success(`Status changed to "${newStatus}"`);
+      toast.success(`Status → "${newStatus}"`);
       onChanged(userId, newStatus);
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
@@ -240,7 +235,6 @@ const StatusDropdown = ({ userId, currentStatus, onChanged }) => {
       setLoading(false);
     }
   };
-
   return (
     <select className="form-select form-select-sm" style={{ minWidth: 110 }}
       value={currentStatus} onChange={handleChange} disabled={loading}>
@@ -251,7 +245,7 @@ const StatusDropdown = ({ userId, currentStatus, onChanged }) => {
   );
 };
 
-// ── Main component ────────────────────────────────────────────────────────────
+// Main
 const AdminDashboard = () => {
   const { user } = useAuth();
   const navigate  = useNavigate();
@@ -278,36 +272,58 @@ const AdminDashboard = () => {
   const [adminFormErrors, setAdminFormErrors] = useState({});
   const [adminFormLoading, setAdminFormLoading] = useState(false);
 
-  // Confirm modal
-  const [confirmModal, setConfirmModal] = useState({ show: false, title: "", message: "", onConfirm: null, danger: false });
-  const closeConfirm = () => setConfirmModal((p) => ({ ...p, show: false }));
+  // Filter + search state (users tab)
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [searchQuery,  setSearchQuery]  = useState("");
+  const searchDebounce = useRef(null);
 
-  // Edit modal — stores the user row being edited (pre-filled from list, no extra GET)
+  const [confirmModal, setConfirmModal] = useState({ show: false });
+  const closeConfirm = () => setConfirmModal((p) => ({ ...p, show: false }));
   const [editTarget, setEditTarget] = useState(null);
 
   useEffect(() => {
     if (activeTab === "users") {
       setLoadingData(true);
-      fetchUsers(1, 10).finally(() => setLoadingData(false));
+      fetchUsers(1, 10, filterStatus === "all" ? "" : filterStatus, searchQuery)
+        .finally(() => setLoadingData(false));
     } else if (activeTab === "admins") {
       setLoadingData(true);
       fetchAdmins().finally(() => setLoadingData(false));
     }
   }, [activeTab]);
 
-  const handlePageChange = useCallback((page) => {
+  // Re-fetch when filter changes
+  const applyFilter = useCallback((status, search, page = 1) => {
     setLoadingData(true);
-    fetchUsers(page, pagination.limit).finally(() => setLoadingData(false));
+    fetchUsers(page, pagination.limit, status === "all" ? "" : status, search)
+      .finally(() => setLoadingData(false));
   }, [pagination.limit]);
 
-  // Status changed inline — update local state only, no refetch
+  const handleFilterChange = (status) => {
+    setFilterStatus(status);
+    applyFilter(status, searchQuery);
+  };
+
+  const handleSearchChange = (e) => {
+    const val = e.target.value;
+    setSearchQuery(val);
+    clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => {
+      applyFilter(filterStatus, val);
+    }, 350); // debounce 350ms
+  };
+
+  const handlePageChange = useCallback((page) => {
+    setLoadingData(true);
+    fetchUsers(page, pagination.limit, filterStatus === "all" ? "" : filterStatus, searchQuery)
+      .finally(() => setLoadingData(false));
+  }, [pagination.limit, filterStatus, searchQuery]);
+
   const handleStatusChanged = useCallback((userId, newStatus) => {
     setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, status: newStatus } : u));
-    // Refresh counts (single query, cheap)
     apiGetDashboard().then((r) => setDashboardCounts(r.data)).catch(() => {});
   }, []);
 
-  // Edit saved — update the row in the list directly, no refetch
   const handleEditSaved = useCallback((updatedUser) => {
     setUsers((prev) => prev.map((u) => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
   }, []);
@@ -321,12 +337,9 @@ const AdminDashboard = () => {
         try {
           await apiDeleteUser(userId);
           toast.success("User deleted");
-          // Remove from list + refresh counts — two minimal calls
           setUsers((prev) => prev.filter((u) => u.id !== userId));
           apiGetDashboard().then((r) => setDashboardCounts(r.data)).catch(() => {});
-        } catch (err) {
-          showApiError(err, (m) => toast.error(m));
-        }
+        } catch (err) { showApiError(err, (m) => toast.error(m)); }
       },
     });
   }, []);
@@ -340,9 +353,7 @@ const AdminDashboard = () => {
         try {
           await apiLogoutUserByAdmin(userId);
           toast.success(`${userName} logged out`);
-        } catch (err) {
-          showApiError(err, (m) => toast.error(m));
-        }
+        } catch (err) { showApiError(err, (m) => toast.error(m)); }
       },
     });
   }, []);
@@ -377,7 +388,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // ── Sidebar ───────────────────────────────────────────────────────────────
+  // Sidebar
   const Sidebar = () => (
     <div className="d-flex flex-column bg-dark text-white"
       style={{ width: sidebarOpen ? 240 : 64, minHeight: "calc(100vh - 56px)", transition: "width 0.25s ease", flexShrink: 0 }}>
@@ -406,7 +417,7 @@ const AdminDashboard = () => {
     </div>
   );
 
-  // ── Content ───────────────────────────────────────────────────────────────
+  // Content
   const renderContent = () => {
     switch (activeTab) {
 
@@ -449,10 +460,51 @@ const AdminDashboard = () => {
       case "users":
         return (
           <>
-            <div className="d-flex align-items-center justify-content-between mb-4">
+            <div className="d-flex align-items-center justify-content-between mb-3">
               <h5 className="fw-bold mb-0">All Users</h5>
               <span className="badge bg-primary">{pagination.total} total</span>
             </div>
+
+            {/* Filter + Search bar */}
+            <div className="card border-0 shadow-sm rounded-3 mb-3">
+              <div className="card-body py-2 px-3 d-flex flex-wrap gap-2 align-items-center">
+                {/* Status filter dropdown */}
+                <div className="d-flex align-items-center gap-2">
+                  <label className="form-label fw-semibold mb-0 small text-muted">Status</label>
+                  <select
+                    className="form-select form-select-sm"
+                    style={{ minWidth: 140 }}
+                    value={filterStatus}
+                    onChange={(e) => handleFilterChange(e.target.value)}>
+                    <option value="all">All Users</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="pending">Pending</option>
+                    <option value="deleted">Deleted</option>
+                  </select>
+                </div>
+
+                {/* Search */}
+                <div className="ms-auto d-flex align-items-center gap-2" style={{ minWidth: 220 }}>
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text bg-white">
+                      <i className="bi bi-search text-muted" />
+                    </span>
+                    <input type="text" className="form-control border-start-0"
+                      placeholder="Search name, email, phone..."
+                      value={searchQuery} onChange={handleSearchChange} />
+                    {searchQuery && (
+                      <button className="btn btn-outline-secondary btn-sm"
+                        onClick={() => { setSearchQuery(""); applyFilter(filterStatus, ""); }}>
+                        <i className="bi bi-x" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Table */}
             <div className="card border-0 shadow-sm rounded-3">
               <div className="card-body p-0">
                 {loadingData ? (
@@ -473,7 +525,12 @@ const AdminDashboard = () => {
                         </thead>
                         <tbody>
                           {users.length === 0 ? (
-                            <tr><td colSpan={6} className="text-center text-muted py-4">No users found</td></tr>
+                            <tr>
+                              <td colSpan={6} className="text-center text-muted py-5">
+                                <i className="bi bi-inbox fs-3 d-block mb-2" />
+                                No users found
+                              </td>
+                            </tr>
                           ) : users.map((u, i) => (
                             <tr key={u.id}>
                               <td className="text-muted small">{(pagination.page - 1) * pagination.limit + i + 1}</td>
@@ -486,24 +543,29 @@ const AdminDashboard = () => {
                               <td>
                                 <div className="d-flex align-items-center gap-2">
                                   <StatusBadge status={u.status} />
-                                  <StatusDropdown userId={u.id} currentStatus={u.status} onChanged={handleStatusChanged} />
+                                  {u.status !== "deleted" && (
+                                    <StatusDropdown userId={u.id} currentStatus={u.status} onChanged={handleStatusChanged} />
+                                  )}
                                 </div>
                               </td>
                               <td>
                                 <div className="d-flex gap-1 justify-content-center">
-                                  {/* Edit — pre-fills from list row, zero extra API call */}
                                   <button className="btn btn-sm btn-outline-primary" title="Edit user"
                                     onClick={() => setEditTarget(u)}>
                                     <i className="bi bi-pencil" />
                                   </button>
-                                  <button className="btn btn-sm btn-outline-danger" title="Delete user"
-                                    onClick={() => handleDeleteUser(u.id, u.userName)}>
-                                    <i className="bi bi-trash" />
-                                  </button>
-                                  <button className="btn btn-sm btn-outline-warning" title="Force logout"
-                                    onClick={() => handleLogoutUser(u.id, u.userName)}>
-                                    <i className="bi bi-box-arrow-right" />
-                                  </button>
+                                  {u.status !== "deleted" && (
+                                    <>
+                                      <button className="btn btn-sm btn-outline-danger" title="Delete user"
+                                        onClick={() => handleDeleteUser(u.id, u.userName)}>
+                                        <i className="bi bi-trash" />
+                                      </button>
+                                      <button className="btn btn-sm btn-outline-warning" title="Force logout"
+                                        onClick={() => handleLogoutUser(u.id, u.userName)}>
+                                        <i className="bi bi-box-arrow-right" />
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -536,7 +598,7 @@ const AdminDashboard = () => {
                   <div className="table-responsive">
                     <table className="table table-bordered table-hover align-middle mb-0">
                       <thead className="table-dark">
-                        <tr>{["ID", "Username", "Email", "Phone"].map((c) => (
+                        <tr>{["ID","Username","Email","Phone"].map((c) => (
                           <th key={c} className="text-uppercase small">{c}</th>
                         ))}</tr>
                       </thead>

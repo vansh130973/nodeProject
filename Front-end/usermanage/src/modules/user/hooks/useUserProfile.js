@@ -1,54 +1,81 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
 import { apiGetUserProfile } from "../services/user.service";
 
+const POLL_INTERVAL = 5_000; // 5 seconds
+
+const isSessionError = (msg = "") =>
+  msg.includes("session expired") ||
+  msg.includes("token") ||
+  msg.includes("unauthorized");
+
 const useUserProfile = () => {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [profile, setProfile] = useState(null);
-  const didFetch = useRef(false);
+  const navigate  = useNavigate();
+  const [profile, setProfile]           = useState(null);
+  const [sessionKilled, setSessionKilled] = useState(false);
+  const didFetch  = useRef(false);
+  const pollTimer = useRef(null);
+
+  // Called whenever a session-expired response is detected
+  const handleSessionKilled = useCallback(() => {
+    clearInterval(pollTimer.current);
+    logout();
+    toast.warn("Your session was ended by an admin. Redirecting to login...", {
+      toastId: "session-killed", // prevent duplicate toasts
+    });
+    navigate("/login", { replace: true });
+  }, [logout, navigate]);
 
   useEffect(() => {
-    if (!user) { navigate("/login"); return; }
+    if (!user) { navigate("/login", { replace: true }); return; }
     if (didFetch.current) return;
     didFetch.current = true;
 
     apiGetUserProfile()
       .then((res) => setProfile(res.data))
       .catch((err) => {
-        const msg = (err.message || "").toLowerCase();
-        // Session was killed by admin force-logout
-        if (msg.includes("session expired") || msg.includes("token") || msg.includes("unauthorized")) {
-          toast.warn("Your session has ended. Please log in again.");
-          logout();
-          navigate("/login");
+        if (isSessionError((err.message || "").toLowerCase())) {
+          handleSessionKilled();
         } else {
           toast.error("Failed to load profile");
         }
       });
-  }, [user, navigate, logout]);
+  }, [user]);
 
-  // Called after every API mutation — detects "session expired" on any request
-  const guardedCall = async (apiFn, onSuccess) => {
+  useEffect(() => {
+    if (!user) return;
+
+    pollTimer.current = setInterval(async () => {
+      try {
+        await apiGetUserProfile();
+      } catch (err) {
+        if (isSessionError((err.message || "").toLowerCase())) {
+          handleSessionKilled();
+        }
+      }
+    }, POLL_INTERVAL);
+
+    return () => clearInterval(pollTimer.current);
+  }, [user, handleSessionKilled]);
+
+  const guardedCall = useCallback(async (apiFn, onSuccess) => {
     try {
       const result = await apiFn();
       if (onSuccess) onSuccess(result);
       return result;
     } catch (err) {
-      const msg = (err.message || "").toLowerCase();
-      if (msg.includes("session expired") || msg.includes("token") || msg.includes("unauthorized")) {
-        toast.warn("Your session has ended. Please log in again.");
-        logout();
-        navigate("/login");
+      if (isSessionError((err.message || "").toLowerCase())) {
+        handleSessionKilled();
         return;
       }
       throw err;
     }
-  };
+  }, [handleSessionKilled]);
 
-  return { profile, setProfile, guardedCall };
+  return { profile, setProfile, sessionKilled, guardedCall };
 };
 
 export default useUserProfile;

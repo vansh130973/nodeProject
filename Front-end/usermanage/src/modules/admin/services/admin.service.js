@@ -26,13 +26,16 @@ export const apiGetDashboard = () =>
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
-// User listing with pagination
-export const apiGetAllUsers = ({ page = 1, limit = 10 } = {}) =>
-  fetch(`${BASE_URL}/admin/users?page=${page}&limit=${limit}`, {
+// User listing — supports page, limit, status filter, search
+export const apiGetAllUsers = ({ page = 1, limit = 10, status = "", search = "" } = {}) => {
+  const params = new URLSearchParams({ page, limit });
+  if (status) params.set("status", status);
+  if (search) params.set("search", search);
+  return fetch(`${BASE_URL}/admin/users?${params}`, {
     headers: getAuthHeaders(),
   }).then(handleResponse);
+};
 
-// Edit user — all fields + optional password in one call
 export const apiEditUser = (id, body) =>
   fetch(`${BASE_URL}/admin/users/${id}`, {
     method: "PUT",
