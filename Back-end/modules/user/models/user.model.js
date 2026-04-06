@@ -2,115 +2,190 @@ import db from "../../../config/db.js";
 
 // Registration: allow if username doesn't exist OR only exists as deleted
 export const findActiveUserByEmailOrUsername = async (email, userName) => {
-  const [result] = await db.query(
-    "SELECT * FROM users WHERE (email = ? OR userName = ?) AND status != 'deleted'",
-    [email, userName]
-  );
-  return result;
+  try {
+    const [result] = await db.query(
+      "SELECT * FROM users WHERE (email = ? OR userName = ?) AND status != 'deleted'",
+      [email, userName]
+    );
+    return result;
+  } catch (error) {
+    console.error("findActiveUserByEmailOrUsername error:", error);
+    throw error;
+  }
 };
 
 export const findUserByUsername = async (userName) => {
-  const [result] = await db.query(
-    "SELECT * FROM users WHERE userName = ? AND status != 'deleted'",
-    [userName]
-  );
-  return result[0] ?? null;
+  try {
+    const [result] = await db.query(
+      "SELECT * FROM users WHERE userName = ? AND status != 'deleted'",
+      [userName]
+    );
+    return result[0] ?? null;
+  } catch (error) {
+    console.error("findUserByUsername error:", error);
+    throw error;
+  }
 };
 
 export const findUserByEmail = async (email) => {
-  const [result] = await db.query(
-    "SELECT * FROM users WHERE email = ? AND status != 'deleted'",
-    [email]
-  );
-  return result[0] ?? null;
+  try {
+    const [result] = await db.query(
+      "SELECT * FROM users WHERE email = ? AND status != 'deleted'",
+      [email]
+    );
+    return result[0] ?? null;
+  } catch (error) {
+    console.error("findUserByEmail error:", error);
+    throw error;
+  }
 };
 
 export const findUserById = async (id) => {
-  const [result] = await db.query(
-    "SELECT * FROM users WHERE id = ?",
-    [id]
-  );
-  return result[0] ?? null;
+  try {
+    const [result] = await db.query(
+      "SELECT * FROM users WHERE id = ?",
+      [id]
+    );
+    return result[0] ?? null;
+  } catch (error) {
+    console.error("findUserById error:", error);
+    throw error;
+  }
 };
 
 export const insertUser = async (
   firstName, lastName, userName, password, email, phone, gender, profilePicture
 ) => {
-  const [result] = await db.query(
-    "INSERT INTO users (firstName, lastName, userName, password, email, phone, gender, profilePicture, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-    [firstName, lastName, userName, password, email, phone, gender, profilePicture]
-  );
-  return { id: result.insertId, firstName, lastName, userName, email, phone, gender, profilePicture, status: "pending" };
+  try {
+    const [result] = await db.query(
+      "INSERT INTO users (firstName, lastName, userName, password, email, phone, gender, profilePicture, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+      [firstName, lastName, userName, password, email, phone, gender, profilePicture]
+    );
+    return { id: result.insertId, firstName, lastName, userName, email, phone, gender, profilePicture, status: "pending" };
+  } catch (error) {
+    console.error("insertUser error:", error);
+    throw error;
+  }
 };
 
-// Update only the profilePicture column — used right after insertUser to set the final path
+// Update only the profilePicture column
 export const updateProfilePicture = async (id, profilePicture) => {
-  await db.query(
-    "UPDATE users SET profilePicture = ?, updatedAt = NOW() WHERE id = ?",
-    [profilePicture, id]
-  );
+  try {
+    await db.query(
+      "UPDATE users SET profilePicture = ?, updatedAt = NOW() WHERE id = ?",
+      [profilePicture, id]
+    );
+  } catch (error) {
+    console.error("updateProfilePicture error:", error);
+    throw error;
+  }
 };
 
 export const updateUserProfile = async (id, firstName, lastName, phone, gender, profilePicture) => {
-  await db.query(
-    "UPDATE users SET firstName = ?, lastName = ?, phone = ?, gender = ?, profilePicture = ?, updatedAt = NOW() WHERE id = ?",
-    [firstName, lastName, phone, gender, profilePicture, id]
-  );
-  return findUserById(id);
+  try {
+    await db.query(
+      "UPDATE users SET firstName = ?, lastName = ?, phone = ?, gender = ?, profilePicture = ?, updatedAt = NOW() WHERE id = ?",
+      [firstName, lastName, phone, gender, profilePicture, id]
+    );
+    return findUserById(id);
+  } catch (error) {
+    console.error("updateUserProfile error:", error);
+    throw error;
+  }
 };
 
 export const updateUserPassword = async (id, hashedPassword) => {
-  await db.query(
-    "UPDATE users SET password = ? WHERE id = ?",
-    [hashedPassword, id]
-  );
+  try {
+    await db.query(
+      "UPDATE users SET password = ? WHERE id = ?",
+      [hashedPassword, id]
+    );
+  } catch (error) {
+    console.error("updateUserPassword error:", error);
+    throw error;
+  }
 };
 
 export const saveUserToken = async (userId, token) => {
-  await db.query(
-    "INSERT INTO userToken (userId, token) VALUES (?, ?)",
-    [userId, token]
-  );
+  try {
+    await db.query(
+      "INSERT INTO userToken (userId, token) VALUES (?, ?)",
+      [userId, token]
+    );
+  } catch (error) {
+    console.error("saveUserToken error:", error);
+    throw error;
+  }
 };
 
 export const findUserToken = async (token) => {
-  const [result] = await db.query(
-    "SELECT * FROM userToken WHERE token = ?",
-    [token]
-  );
-  return result[0] ?? null;
+  try {
+    const [result] = await db.query(
+      "SELECT * FROM userToken WHERE token = ?",
+      [token]
+    );
+    return result[0] ?? null;
+  } catch (error) {
+    console.error("findUserToken error:", error);
+    throw error;
+  }
 };
 
 export const deleteUserToken = async (token) => {
-  await db.query(
-    "DELETE FROM userToken WHERE token = ?",
-    [token]
-  );
+  try {
+    await db.query(
+      "DELETE FROM userToken WHERE token = ?",
+      [token]
+    );
+  } catch (error) {
+    console.error("deleteUserToken error:", error);
+    throw error;
+  }
 };
 
 export const deleteAllUserTokens = async (userId) => {
-  await db.query(
-    "DELETE FROM userToken WHERE userId = ?",
-    [userId]
-  );
+  try {
+    await db.query(
+      "DELETE FROM userToken WHERE userId = ?",
+      [userId]
+    );
+  } catch (error) {
+    console.error("deleteAllUserTokens error:", error);
+    throw error;
+  }
 };
 
 export const saveOtp = async (userId, otp, expiresAt) => {
-  await db.query("DELETE FROM userOtp WHERE userId = ?", [userId]);
-  await db.query(
-    "INSERT INTO userOtp (userId, otp, expiresAt) VALUES (?, ?, ?)",
-    [userId, otp, expiresAt]
-  );
+  try {
+    await db.query("DELETE FROM userOtp WHERE userId = ?", [userId]);
+    await db.query(
+      "INSERT INTO userOtp (userId, otp, expiresAt) VALUES (?, ?, ?)",
+      [userId, otp, expiresAt]
+    );
+  } catch (error) {
+    console.error("saveOtp error:", error);
+    throw error;
+  }
 };
 
 export const findOtpByUserId = async (userId) => {
-  const [result] = await db.query(
-    "SELECT * FROM userOtp WHERE userId = ?",
-    [userId]
-  );
-  return result[0] ?? null;
+  try {
+    const [result] = await db.query(
+      "SELECT * FROM userOtp WHERE userId = ?",
+      [userId]
+    );
+    return result[0] ?? null;
+  } catch (error) {
+    console.error("findOtpByUserId error:", error);
+    throw error;
+  }
 };
 
 export const deleteOtp = async (userId) => {
-  await db.query("DELETE FROM userOtp WHERE userId = ?", [userId]);
+  try {
+    await db.query("DELETE FROM userOtp WHERE userId = ?", [userId]);
+  } catch (error) {
+    console.error("deleteOtp error:", error);
+    throw error;
+  }
 };

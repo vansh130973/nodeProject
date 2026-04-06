@@ -16,17 +16,22 @@ import {
   deleteAdminToken,
   updateUserByAdmin,
 } from "../models/admin.model.js";
+
 import { formatAdminData } from "../helpers/admin.helper.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
+
+// ---------------- ADD ADMIN ----------------
 
 export const addAdmin = async (req, res) => {
   try {
     const { userName, password, phone, email } = req.body;
 
     const existingUsers = await findAdminByEmailOrUsername(email, userName);
+
     if (existingUsers.length > 0) {
       if (existingUsers.some((u) => u.email === email))
         return sendErrorResponse(res, "Email already registered", 409);
+
       if (existingUsers.some((u) => u.userName === userName))
         return sendErrorResponse(res, "Username already taken", 409);
     }
@@ -34,18 +39,17 @@ export const addAdmin = async (req, res) => {
     const hashedPassword = await bcrypt.hash(String(password), 10);
     const insertedAdmin = await insertAdmin(userName, hashedPassword, email, phone);
 
-    return sendSuccessResponse(
-      res,
-      "Admin registered successfully",
-      { admin: formatAdminData(insertedAdmin) },
-      null,
-      201
-    );
+    return sendSuccessResponse(res, "Admin registered successfully", {
+      admin: formatAdminData(insertedAdmin),
+    }, undefined, 201);
+
   } catch (error) {
     console.error("addAdmin error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
+
+// ---------------- LOGIN ----------------
 
 export const loginAdmin = async (req, res) => {
   try {
@@ -57,44 +61,56 @@ export const loginAdmin = async (req, res) => {
     const isMatch = await bcrypt.compare(String(password), admin.password);
     if (!isMatch) return sendErrorResponse(res, "Invalid password", 401);
 
-    const token = jwt.sign(formatAdminData(admin), process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign(formatAdminData(admin), process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
     await saveAdminToken(admin.id, token);
 
-    return sendSuccessResponse(res, "Login successful", null, token, 200);
+    return sendSuccessResponse(res, "Login successful", {}, token, 200);
+
   } catch (error) {
     console.error("loginAdmin error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
 
+// ---------------- LOGOUT ----------------
+
 export const logoutAdmin = async (req, res) => {
   try {
     await deleteAdminToken(req.token);
-    return sendSuccessResponse(res, "Logged out successfully", null, null, 200);
+    return sendSuccessResponse(res, "Logged out successfully");
   } catch (error) {
     console.error("logoutAdmin error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
 
+// ---------------- DASHBOARD ----------------
+
 export const getDashboard = async (req, res) => {
   try {
     const counts = await getDashboardCounts();
-    return sendSuccessResponse(res, "Dashboard fetched successfully", { data: counts }, null, 200);
+
+    return sendSuccessResponse(res, "Dashboard fetched successfully", {
+      data: counts,
+    });
+
   } catch (error) {
     console.error("getDashboard error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
 
-// User listing with pagination
+// ---------------- USERS ----------------
 
 export const showAllUsers = async (req, res) => {
   try {
-    const page   = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
-    const status = req.query.status || "";   // "active"|"inactive"|"pending"|"deleted"|"all"|""
-    const search = req.query.search || "";   // text search
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const status = req.query.status || "";
+    const search = req.query.search || "";
 
     const [users, total] = await Promise.all([
       getUsersWithPagination(page, limit, status, search),
@@ -113,27 +129,30 @@ export const showAllUsers = async (req, res) => {
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
       },
-    }, null, 200);
+    });
   } catch (error) {
     console.error("showAllUsers error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
 
-// Single user (for edit)
+// ---------------- GET USER ----------------
 
 export const getUserById = async (req, res) => {
   try {
     const user = await findUserByIdAdmin(req.params.id);
+
     if (!user) return sendErrorResponse(res, "User not found", 404);
-    return sendSuccessResponse(res, "User fetched successfully", { user }, null, 200);
+
+    return sendSuccessResponse(res, "User fetched successfully", { user });
+
   } catch (error) {
     console.error("getUserById error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
 
-// Update user status
+// ---------------- STATUS ----------------
 
 export const changeUserStatus = async (req, res) => {
   try {
@@ -142,28 +161,28 @@ export const changeUserStatus = async (req, res) => {
 
     const allowed = ["active", "pending", "inactive"];
     if (!allowed.includes(status))
-      return sendErrorResponse(res, `Invalid status. Allowed: ${allowed.join(", ")}`, 400);
+      return sendErrorResponse(res, `Invalid status`, 400);
 
     const user = await findUserByIdAdmin(id);
     if (!user) return sendErrorResponse(res, "User not found", 404);
     if (user.status === "deleted")
-      return sendErrorResponse(res, "Cannot update status of a deleted user", 400);
+      return sendErrorResponse(res, "Cannot update deleted user", 400);
 
     await updateUserStatus(id, status);
 
-    // If deactivating/pending, remove token
     if (status !== "active") {
       await forceLogoutUser(id);
     }
 
-    return sendSuccessResponse(res, `User status updated to '${status}'`, null, null, 200);
+    return sendSuccessResponse(res, `User status updated to '${status}'`);
+
   } catch (error) {
     console.error("changeUserStatus error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
 
-// Soft delete user
+// ---------------- DELETE ----------------
 
 export const deleteUser = async (req, res) => {
   try {
@@ -172,18 +191,19 @@ export const deleteUser = async (req, res) => {
     const user = await findUserByIdAdmin(id);
     if (!user) return sendErrorResponse(res, "User not found", 404);
     if (user.status === "deleted")
-      return sendErrorResponse(res, "User is already deleted", 400);
+      return sendErrorResponse(res, "Already deleted", 400);
 
     await softDeleteUser(id);
 
-    return sendSuccessResponse(res, "User deleted successfully", null, null, 200);
+    return sendSuccessResponse(res, "User deleted successfully");
+
   } catch (error) {
     console.error("deleteUser error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
 
-// Force logout user
+// ---------------- FORCE LOGOUT ----------------
 
 export const logoutUserByAdmin = async (req, res) => {
   try {
@@ -194,15 +214,15 @@ export const logoutUserByAdmin = async (req, res) => {
 
     await forceLogoutUser(id);
 
-    return sendSuccessResponse(res, "User logged out successfully", null, null, 200);
-  } catch (error) {
-    console.error("logoutUserByAdmin error:", error);
-    return sendErrorResponse(res, "Server error", 500);
+    return sendSuccessResponse(res, "User logged out successfully");
+
+  } catch (err) {
+    console.log("logoutUserByAdmin error:", err);
+    return sendErrorResponse(res, "Unable to logout user", 500, err.stack);
   }
 };
 
-
-// Admin edit user
+// ---------------- EDIT ----------------
 
 export const editUser = async (req, res) => {
   try {
@@ -211,32 +231,43 @@ export const editUser = async (req, res) => {
 
     const user = await findUserByIdAdmin(id);
     if (!user) return sendErrorResponse(res, "User not found", 404);
-    if (user.status === "deleted") return sendErrorResponse(res, "Cannot edit a deleted user", 400);
+    if (user.status === "deleted")
+      return sendErrorResponse(res, "Cannot edit deleted user", 400);
 
-    let hashedPassword = null;
+    let hashedPassword;
     if (password && password.trim()) {
-      const bcrypt = await import("bcrypt");
-      hashedPassword = await bcrypt.default.hash(password, 10);
+      hashedPassword = await bcrypt.hash(password, 10);
     }
 
     const updated = await updateUserByAdmin(id, {
-      firstName, lastName, email, phone, gender,
+      firstName,
+      lastName,
+      email,
+      phone,
+      gender,
       password: hashedPassword,
     });
 
-    return sendSuccessResponse(res, "User updated successfully", { user: updated }, null, 200);
+    return sendSuccessResponse(res, "User updated successfully", {
+      user: updated,
+    });
+
   } catch (error) {
     console.error("editUser error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
 
-//Admin listing
+// ---------------- ADMINS ----------------
 
 export const showAllAdmins = async (req, res) => {
   try {
     const admins = await getAllAdmins();
-    return sendSuccessResponse(res, "Admins fetched successfully", { admins }, null, 200);
+
+    return sendSuccessResponse(res, "Admins fetched successfully", {
+      admins,
+    });
+
   } catch (error) {
     console.error("showAllAdmins error:", error);
     return sendErrorResponse(res, "Server error", 500);

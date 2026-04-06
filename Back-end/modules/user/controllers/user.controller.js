@@ -30,7 +30,6 @@ export const registerUser = async (req, res) => {
   try {
     const { firstName, lastName, userName, password, email, phone, gender } = req.body;
 
-    // Block if non-deleted user already exists with same email or username
     const existingUsers = await findActiveUserByEmailOrUsername(email, userName);
     if (existingUsers.length > 0) {
       if (existingUsers.some((u) => u.email === email))
@@ -41,12 +40,10 @@ export const registerUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert with null profilePicture first — we need the userId for the folder name
     const newUser = await insertUser(
       firstName, lastName, userName, hashedPassword, email, phone, gender, null
     );
 
-    // Now move uploaded file to uploads/{userId}/profile.ext and update DB
     if (req.file) {
       const picturePath = await moveToUserFolder(req.file, newUser.id);
       await updateProfilePicture(newUser.id, picturePath);
@@ -57,7 +54,7 @@ export const registerUser = async (req, res) => {
       res,
       "Registration successful. Your account is pending admin approval before you can log in.",
       { data: formatUserData(newUser) },
-      null,
+      undefined,
       201
     );
   } catch (error) {
@@ -88,7 +85,7 @@ export const loginUser = async (req, res) => {
     const token = jwt.sign(formatUserData(user), process.env.JWT_SECRET, { expiresIn: "1h" });
     await saveUserToken(user.id, token);
 
-    return sendSuccessResponse(res, "Login successful", null, token, 200);
+    return sendSuccessResponse(res, "Login successful", {}, token, 200);
   } catch (error) {
     console.error("loginUser error:", error);
     return sendErrorResponse(res, "Server error");
@@ -100,7 +97,7 @@ export const loginUser = async (req, res) => {
 export const logoutUser = async (req, res) => {
   try {
     await deleteUserToken(req.token);
-    return sendSuccessResponse(res, "Logged out successfully", null, null, 200);
+    return sendSuccessResponse(res, "Logged out successfully");
   } catch (error) {
     console.error("logoutUser error:", error);
     return sendErrorResponse(res, "Server error");
@@ -113,7 +110,10 @@ export const getDashboard = async (req, res) => {
   try {
     const user = await findUserById(req.user.id);
     if (!user) return sendErrorResponse(res, "User not found", 404);
-    return sendSuccessResponse(res, "Dashboard fetched successfully", { data: formatUserData(user) }, null, 200);
+
+    return sendSuccessResponse(res, "Dashboard fetched successfully", {
+      data: formatUserData(user),
+    });
   } catch (error) {
     console.error("getDashboard error:", error);
     return sendErrorResponse(res, "Server error", 500);
@@ -124,7 +124,10 @@ export const getUserProfile = async (req, res) => {
   try {
     const user = await findUserById(req.user.id);
     if (!user) return sendErrorResponse(res, "User not found", 404);
-    return sendSuccessResponse(res, "Profile fetched successfully", { data: formatUserData(user) }, null, 200);
+
+    return sendSuccessResponse(res, "Profile fetched successfully", {
+      data: formatUserData(user),
+    });
   } catch (error) {
     console.error("getUserProfile error:", error);
     return sendErrorResponse(res, "Server error", 500);
@@ -138,23 +141,32 @@ export const updateProfile = async (req, res) => {
     const { firstName, lastName, phone, gender } = req.body;
     const userId = req.user.id;
 
-    // Fetch current pic so we can keep it if no new file uploaded
     const currentUser = await findUserById(userId);
     let profilePicture = currentUser?.profilePicture ?? null;
 
     if (req.file) {
-      // Move new file to uploads/{userId}/profile.ext (replaces old one)
       profilePicture = await moveToUserFolder(req.file, userId);
     }
 
-    const updatedUser = await updateUserProfile(userId, firstName, lastName, phone, gender, profilePicture);
+    const updatedUser = await updateUserProfile(
+      userId,
+      firstName,
+      lastName,
+      phone,
+      gender,
+      profilePicture
+    );
 
-    return sendSuccessResponse(res, "Profile updated successfully", { data: formatUserData(updatedUser) }, null, 200);
+    return sendSuccessResponse(res, "Profile updated successfully", {
+      data: formatUserData(updatedUser),
+    });
   } catch (error) {
     console.error("updateProfile error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
+
+// ─── Change Password ──────────────────────────────────────────────────────────
 
 export const changePassword = async (req, res) => {
   try {
@@ -167,13 +179,13 @@ export const changePassword = async (req, res) => {
     await updateUserPassword(user.id, hashedNew);
     await deleteUserToken(req.token);
 
-    return sendSuccessResponse(res, "Password changed successfully. Please login again.", null, null, 200);
+    return sendSuccessResponse(res, "Password changed successfully. Please login again.");
   } catch (error) {
     return sendErrorResponse(res, "Server error", 500);
   }
 };
 
-// ─── Forgot / Verify OTP / Reset Password ─────────────────────────────────────
+// ─── Forgot Password ──────────────────────────────────────────────────────────
 
 export const forgotPassword = async (req, res) => {
   try {
@@ -181,7 +193,7 @@ export const forgotPassword = async (req, res) => {
 
     const user = await findUserByEmail(email);
     if (!user) {
-      return sendSuccessResponse(res, "If this email exists, an OTP has been sent.", null, null, 200);
+      return sendSuccessResponse(res, "If this email exists, an OTP has been sent.");
     }
 
     const otp = generateOtp();
@@ -190,12 +202,14 @@ export const forgotPassword = async (req, res) => {
     await saveOtp(user.id, otp, expiresAt);
     await sendOtpEmail(email, otp);
 
-    return sendSuccessResponse(res, "OTP sent to your email.", null, null, 200);
+    return sendSuccessResponse(res, "OTP sent to your email.");
   } catch (error) {
     console.error("forgotPassword error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
+
+// ─── Verify OTP ───────────────────────────────────────────────────────────────
 
 export const verifyOtp = async (req, res) => {
   try {
@@ -205,20 +219,22 @@ export const verifyOtp = async (req, res) => {
     if (!user) return sendErrorResponse(res, "Invalid request.", 400);
 
     const record = await findOtpByUserId(user.id);
-    if (!record) return sendErrorResponse(res, "OTP not found. Please request a new one.", 400);
+    if (!record) return sendErrorResponse(res, "OTP not found.", 400);
 
     if (new Date() > new Date(record.expiresAt))
-      return sendErrorResponse(res, "OTP has expired. Please try again.", 400);
+      return sendErrorResponse(res, "OTP expired.", 400);
 
     if (record.otp !== otp)
       return sendErrorResponse(res, "Invalid OTP.", 400);
 
-    return sendSuccessResponse(res, "OTP verified successfully.", null, null, 200);
+    return sendSuccessResponse(res, "OTP verified successfully.");
   } catch (error) {
     console.error("verifyOtp error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };
+
+// ─── Reset Password ───────────────────────────────────────────────────────────
 
 export const resetPassword = async (req, res) => {
   try {
@@ -228,10 +244,10 @@ export const resetPassword = async (req, res) => {
     if (!user) return sendErrorResponse(res, "Invalid request.", 400);
 
     const record = await findOtpByUserId(user.id);
-    if (!record) return sendErrorResponse(res, "OTP not found. Please request a new one.", 400);
+    if (!record) return sendErrorResponse(res, "OTP not found.", 400);
 
     if (new Date() > new Date(record.expiresAt))
-      return sendErrorResponse(res, "OTP has expired. Please request a new one.", 400);
+      return sendErrorResponse(res, "OTP expired.", 400);
 
     if (record.otp !== otp)
       return sendErrorResponse(res, "Invalid OTP.", 400);
@@ -240,7 +256,7 @@ export const resetPassword = async (req, res) => {
     await updateUserPassword(user.id, hashedPassword);
     await deleteOtp(user.id);
 
-    return sendSuccessResponse(res, "Password reset successfully. Please login.", null, null, 200);
+    return sendSuccessResponse(res, "Password reset successfully. Please login.");
   } catch (error) {
     console.error("resetPassword error:", error);
     return sendErrorResponse(res, "Server error", 500);
