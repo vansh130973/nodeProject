@@ -4,8 +4,8 @@ import {
   findAdminByEmailOrUsername,
   insertAdmin,
   findAdminByUsername,
-  getUsersWithPagination,
-  getUsersCount,
+  // getUsersWithPagination,
+  // getUsersCount,
   findUserByIdAdmin,
   updateUserStatus,
   softDeleteUser,
@@ -15,6 +15,7 @@ import {
   saveAdminToken,
   deleteAdminToken,
   updateUserByAdmin,
+  getUsersWithPaginationAndCount,
 } from "../models/admin.model.js";
 
 import { formatAdminData } from "../helpers/admin.helper.js";
@@ -112,10 +113,11 @@ export const showAllUsers = async (req, res) => {
     const status = req.query.status || "";
     const search = req.query.search || "";
 
-    const [users, total] = await Promise.all([
-      getUsersWithPagination(page, limit, status, search),
-      getUsersCount(status, search),
-    ]);
+    // const [users, total] = await Promise.all([
+    //   getUsersWithPagination(page, limit, status, search),
+    //   getUsersCount(status, search),
+    // ]);
+    const { rows: users, total } = await getUsersWithPaginationAndCount(page, limit, status, search);
 
     const totalPages = Math.ceil(total / limit);
 

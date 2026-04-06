@@ -54,79 +54,89 @@ export const findAdminById = async (id) => {
 
 // ---------------- USERS ----------------
 
-export const getUsersWithPagination = async (page = 1, limit = 10, status = "", search = "") => {
+export const getUsersWithPaginationAndCount = async (page = 1, limit = 10, status = "", search = "") => {
   try {
     const offset = (page - 1) * limit;
 
     const conditions = [];
     const params = [];
 
+    // Status filter
     if (status && status !== "all") {
       conditions.push("status = ?");
       params.push(status);
-    }
-
-    if (!status || status === "all") {
+    } else {
+      // Default: hide deleted
       conditions.push("status != 'deleted'");
     }
 
+    // Search filter
     if (search && search.trim()) {
-      conditions.push("(firstName LIKE ? OR lastName LIKE ? OR userName LIKE ? OR email LIKE ? OR phone LIKE ?)");
+      conditions.push(
+        "(firstName LIKE ? OR lastName LIKE ? OR userName LIKE ? OR email LIKE ? OR phone LIKE ?)"
+      );
       const like = `%${search.trim()}%`;
       params.push(like, like, like, like, like);
     }
 
     const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
 
-    const [rows] = await db.query(
-      `SELECT id, firstName, lastName, userName, phone, email, gender, status, profilePicture, createdAt
-       FROM users
-       ${where}
-       ORDER BY id DESC
-       LIMIT ? OFFSET ?`,
-      [...params, limit, offset]
-    );
+    // Run both queries in parallel
+    const [rowsResult, countResult] = await Promise.all([
+      db.query(
+        `SELECT id, firstName, lastName, userName, phone, email, gender, status, profilePicture, createdAt
+         FROM users
+         ${where}
+         ORDER BY id DESC
+         LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+      ),
+      db.query(`SELECT COUNT(*) AS total FROM users ${where}`, params)
+    ]);
 
-    return rows;
+    const rows = rowsResult[0];
+    const total = countResult[0][0]?.total ?? 0;
+
+    return { rows, total };
   } catch (error) {
-    console.error("getUsersWithPagination error:", error);
+    console.error("getUsersWithPaginationAndCount error:", error);
     throw error;
   }
 };
 
-export const getUsersCount = async (status = "", search = "") => {
-  try {
-    const conditions = [];
-    const params = [];
+// export const getUsersCount = async (status = "", search = "") => {
+//   try {
+//     const conditions = [];
+//     const params = [];
 
-    if (status && status !== "all") {
-      conditions.push("status = ?");
-      params.push(status);
-    }
+//     if (status && status !== "all") {
+//       conditions.push("status = ?");
+//       params.push(status);
+//     }
 
-    if (!status || status === "all") {
-      conditions.push("status != 'deleted'");
-    }
+//     if (!status || status === "all") {
+//       conditions.push("status != 'deleted'");
+//     }
 
-    if (search && search.trim()) {
-      conditions.push("(firstName LIKE ? OR lastName LIKE ? OR userName LIKE ? OR email LIKE ? OR phone LIKE ?)");
-      const like = `%${search.trim()}%`;
-      params.push(like, like, like, like, like);
-    }
+//     if (search && search.trim()) {
+//       conditions.push("(firstName LIKE ? OR lastName LIKE ? OR userName LIKE ? OR email LIKE ? OR phone LIKE ?)");
+//       const like = `%${search.trim()}%`;
+//       params.push(like, like, like, like, like);
+//     }
 
-    const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
+//     const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
 
-    const [[{ total }]] = await db.query(
-      `SELECT COUNT(*) AS total FROM users ${where}`,
-      params
-    );
+//     const [[{ total }]] = await db.query(
+//       `SELECT COUNT(*) AS total FROM users ${where}`,
+//       params
+//     );
 
-    return total;
-  } catch (error) {
-    console.error("getUsersCount error:", error);
-    throw error;
-  }
-};
+//     return total;
+//   } catch (error) {
+//     console.error("getUsersCount error:", error);
+//     throw error;
+//   }
+// };
 
 // ---------------- SINGLE USER ----------------
 
