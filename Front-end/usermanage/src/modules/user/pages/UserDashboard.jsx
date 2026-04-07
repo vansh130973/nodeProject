@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
 import {
@@ -13,29 +13,13 @@ import useUserProfile from "../hooks/useUserProfile";
 import InputField from "../../../components/InputField";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
-// Session killed screen
-const SessionKilledScreen = () => (
-  <div className="min-vh-100 bg-light d-flex align-items-center justify-content-center">
-    <div className="card border-0 shadow-sm rounded-4 p-4 text-center" style={{ maxWidth: 460 }}>
-      <div className="card-body">
-        <div className="mb-3" style={{ fontSize: 52 }}>🔒</div>
-        <h5 className="fw-bold mb-2">Session Ended</h5>
-        <p className="text-muted mb-4">
-          Admin has logged you out. Please log in again to access your dashboard.
-        </p>
-        <Link to="/login" className="btn btn-warning fw-semibold px-5">
-          Go to Login
-        </Link>
-      </div>
-    </div>
-  </div>
-);
+
 
 const UserDashboard = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { profile, setProfile, sessionKilled, guardedCall } = useUserProfile();
+  const { profile, setProfile, guardedCall } = useUserProfile();
 
   const getActiveTab = () => {
     if (pathname === "/dashboard")       return "profile";
@@ -64,9 +48,6 @@ const UserDashboard = () => {
       gender:    profile.gender ?? "",
     });
   }
-
-  // If session was killed by admin — show dedicated screen, no redirect
-  if (sessionKilled) return <SessionKilledScreen />;
 
   const handleEditChange = (e) => {
     setEditForm((p) => ({ ...p, [e.target.name]: e.target.value }));

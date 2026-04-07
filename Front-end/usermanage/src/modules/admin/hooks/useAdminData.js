@@ -7,8 +7,8 @@ import { showApiError } from "../../../utils/api";
 
 const useAdminData = () => {
   const { user } = useAuth();
-  const navigate  = useNavigate();
-  const didInit   = useRef(false); // prevent re-firing when navigate reference changes
+  const navigate = useNavigate();
+  const didInit  = useRef(false);
 
   const [users, setUsers]               = useState([]);
   const [pagination, setPagination]     = useState({ total: 0, page: 1, limit: 10, totalPages: 1 });
@@ -16,7 +16,6 @@ const useAdminData = () => {
   const [dashboardCounts, setDashboardCounts] = useState(null);
 
   useEffect(() => {
-    // Redirect if not admin
     if (!user || !(user.role === "ADMIN" || user.role === "MASTER_ADMIN")) {
       navigate("/admin/login");
       return;
@@ -24,18 +23,17 @@ const useAdminData = () => {
     if (didInit.current) return;
     didInit.current = true;
 
-    // Dashboard counts
+    // Session errors are handled globally in api.js — only show toast for other failures
     apiGetDashboard()
       .then((res) => setDashboardCounts(res.data))
-      .catch((err) => showApiError(err, (m) => toast.error(m)));
+      .catch((err) => { if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m)); });
 
-    // Admins list — MASTER_ADMIN only, needed for "Total Admins" card on first load
     if (user.role === "MASTER_ADMIN") {
       apiGetAllAdmins()
         .then((res) => setAdmins(res.admins))
-        .catch(() => {});
+        .catch((err) => { if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m)); });
     }
-  }, [user]);
+  }, [user, navigate]);
 
   const fetchUsers = async (page = 1, limit = 10, status = "", search = "") => {
     try {
@@ -43,7 +41,7 @@ const useAdminData = () => {
       setUsers(res.users);
       setPagination(res.pagination);
     } catch (err) {
-      showApiError(err, (m) => toast.error(m));
+      if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m));
     }
   };
 
@@ -53,7 +51,7 @@ const useAdminData = () => {
       const res = await apiGetAllAdmins();
       setAdmins(res.admins);
     } catch (err) {
-      showApiError(err, (m) => toast.error(m));
+      if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m));
     }
   };
 

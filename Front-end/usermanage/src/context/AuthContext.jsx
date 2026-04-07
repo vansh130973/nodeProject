@@ -1,37 +1,68 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+
+const TOKEN_KEY = "token";
 
 const AuthContext = createContext(null);
 
-const decodeToken = (token) => {
-  try {
-    return JSON.parse(atob(token.split(".")[1]));
-  } catch {
-    return null;
-  }
-};
-
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => localStorage.getItem("token"));
-  const [user, setUser] = useState(() => {
-    const savedToken = localStorage.getItem("token");
-    return savedToken ? decodeToken(savedToken) : null;
-  });
+  const [user, setUser]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const onSessionExpiredRef   = useRef(null);
 
-  const login = useCallback((token) => {
-    localStorage.setItem("token", token);
-    localStorage.removeItem("user");
-    setToken(token);
-    setUser(decodeToken(token));
+  // On page load — restore session from localStorage token via /me
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) { setLoading(false); return; }
+
+    fetch("http://localhost:3200/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) setUser(data.data);
+        else localStorage.removeItem(TOKEN_KEY); // token invalid — clean up
+      })
+      .catch(() => {
+        // Network error or non-JSON response (e.g. 404 on /me) —
+        // the token is invalid/unreachable, so clear it to avoid
+        // the ProtectedRoute spinner getting stuck forever.
+        localStorage.removeItem(TOKEN_KEY);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
+  // Call after successful login — stores token + decoded user data
+  const login = useCallback((token) => {
+    localStorage.setItem(TOKEN_KEY, token);
+    try {
+      const decoded = JSON.parse(atob(token.split(".")[1]));
+      setUser(decoded);
+    } catch {
+      // Fallback: let /me restore the user on next load
+    }
+  }, []);
+
+  // Call on intentional logout — removes token
   const logout = useCallback(() => {
-    localStorage.removeItem("token");
+    localStorage.removeItem(TOKEN_KEY);
     setUser(null);
-    setToken(null);
+  }, []);
+
+  // Called by the API layer when any response signals the session is dead
+  const handleSessionExpired = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    setUser(null);
+    if (onSessionExpiredRef.current) {
+      onSessionExpiredRef.current();
+    }
+  }, []);
+
+  const setOnSessionExpired = useCallback((fn) => {
+    onSessionExpiredRef.current = fn;
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, handleSessionExpired, setOnSessionExpired }}>
       {children}
     </AuthContext.Provider>
   );

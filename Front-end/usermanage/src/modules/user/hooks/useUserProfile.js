@@ -4,78 +4,46 @@ import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
 import { apiGetUserProfile } from "../services/user.service";
 
-const POLL_INTERVAL = 5_000; // 5 seconds
-
-const isSessionError = (msg = "") =>
-  msg.includes("session expired") ||
-  msg.includes("token") ||
-  msg.includes("unauthorized");
-
 const useUserProfile = () => {
-  const { user, logout } = useAuth();
-  const navigate  = useNavigate();
-  const [profile, setProfile]           = useState(null);
-  const [sessionKilled, setSessionKilled] = useState(false);
-  const didFetch  = useRef(false);
-  const pollTimer = useRef(null);
-
-  // Called whenever a session-expired response is detected
-  const handleSessionKilled = useCallback(() => {
-    clearInterval(pollTimer.current);
-    logout();
-    toast.warn("Your session was ended by an admin. Redirecting to login...", {
-      toastId: "session-killed", // prevent duplicate toasts
-    });
-    navigate("/login", { replace: true });
-  }, [logout, navigate]);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState(null);
+  const didFetch = useRef(false);
 
   useEffect(() => {
     if (!user) { navigate("/login", { replace: true }); return; }
     if (didFetch.current) return;
     didFetch.current = true;
 
+    // If the token is already invalid (e.g. admin logged user out before page load),
+    // handleResponse in api.js will catch the 401 / session-expired message and
+    // automatically call the global session-expired handler → redirect to /login.
     apiGetUserProfile()
       .then((res) => setProfile(res.data))
       .catch((err) => {
-        if (isSessionError((err.message || "").toLowerCase())) {
-          handleSessionKilled();
-        } else {
+        // Session errors are already handled globally in api.js (toast + redirect).
+        // Only show a toast for unrelated failures.
+        if (!err.isSessionExpired) {
           toast.error("Failed to load profile");
         }
       });
-  }, [user]);
+  }, [user, navigate]);
 
-  useEffect(() => {
-    if (!user) return;
-
-    pollTimer.current = setInterval(async () => {
-      try {
-        await apiGetUserProfile();
-      } catch (err) {
-        if (isSessionError((err.message || "").toLowerCase())) {
-          handleSessionKilled();
-        }
-      }
-    }, POLL_INTERVAL);
-
-    return () => clearInterval(pollTimer.current);
-  }, [user, handleSessionKilled]);
-
+  // Wraps any API call: if the token is invalidated mid-session (e.g. admin force-
+  // logouts the user), handleResponse throws with isSessionExpired = true and the
+  // global watcher in App.jsx redirects instantly — no polling required.
   const guardedCall = useCallback(async (apiFn, onSuccess) => {
     try {
       const result = await apiFn();
       if (onSuccess) onSuccess(result);
       return result;
     } catch (err) {
-      if (isSessionError((err.message || "").toLowerCase())) {
-        handleSessionKilled();
-        return;
-      }
-      throw err;
+      if (!err.isSessionExpired) throw err;
+      // Session expired — already handled globally, just swallow here.
     }
-  }, [handleSessionKilled]);
+  }, []);
 
-  return { profile, setProfile, sessionKilled, guardedCall };
+  return { profile, setProfile, guardedCall };
 };
 
 export default useUserProfile;
