@@ -27,12 +27,6 @@ const useAdminData = () => {
     apiGetDashboard()
       .then((res) => setDashboardCounts(res.data))
       .catch((err) => { if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m)); });
-
-    if (user.role === "MASTER_ADMIN") {
-      apiGetAllAdmins()
-        .then((res) => setAdmins(res.admins))
-        .catch((err) => { if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m)); });
-    }
   }, [user, navigate]);
 
   const fetchUsers = async (page = 1, limit = 10, status = "", search = "") => {

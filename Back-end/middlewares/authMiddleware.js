@@ -1,7 +1,10 @@
 import jwt from "jsonwebtoken";
 import { findUserToken } from "../modules/user/models/user.model.js";
 import { findAdminToken } from "../modules/admin/models/admin.model.js";
+import { getPermission } from "../modules/role/role.model.js";
 import { sendErrorResponse } from "../utils/response.js";
+
+// ─── authenticate ─────────────────────────────────────────────────────────────
 
 export const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -19,13 +22,13 @@ export const authenticate = async (req, res, next) => {
 
     const savedToken = isAdmin
       ? await findAdminToken(token)
-      : await findUserToken(token);  
+      : await findUserToken(token);
 
     if (!savedToken) {
-      return sendErrorResponse(res, "Session expired. Please log in again.", 401);
+      return sendErrorResponse(res, "Session expired. Please log in again.", 200);
     }
 
-    req.user = decoded;
+    req.user  = decoded;
     req.token = token;
     next();
   } catch (err) {

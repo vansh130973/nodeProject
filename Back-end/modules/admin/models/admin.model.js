@@ -211,20 +211,30 @@ export const getAllAdmins = async () => {
 
 export const getDashboardCounts = async () => {
   try {
-    const [[counts]] = await db.query(
-      `SELECT
-        COUNT(*) AS totalUsers,
-        SUM(status = 'active') AS activeUsers,
-        SUM(status = 'pending') AS pendingUsers,
-        SUM(status = 'inactive') AS inactiveUsers,
-        SUM(status = 'deleted') AS deletedUsers
-       FROM users`
-    );
-    return counts;
+    const [[result]] = await db.query(`
+      SELECT
+        /* USERS */
+        (SELECT COUNT(*) FROM users) AS totalUsers,
+        (SELECT COUNT(*) FROM users WHERE status = 'active') AS activeUsers,
+        (SELECT COUNT(*) FROM users WHERE status = 'pending') AS pendingUsers,
+        (SELECT COUNT(*) FROM users WHERE status = 'inactive') AS inactiveUsers,
+        (SELECT COUNT(*) FROM users WHERE status = 'deleted') AS deletedUsers,
+
+        /* ADMINS */
+        (SELECT COUNT(*) FROM admins WHERE role != 'MASTER_ADMIN') AS totalAdmins
+    `);
+    return result;
   } catch (error) {
     console.error("getDashboardCounts error:", error);
     throw error;
   }
+};
+
+export const getAdminsCount = async () => {
+  const [rows] = await db.query(
+    "SELECT COUNT(*) as count FROM admins WHERE status != 'deleted'"
+  );
+  return rows[0].count;
 };
 
 // ---------------- UPDATE USER ----------------

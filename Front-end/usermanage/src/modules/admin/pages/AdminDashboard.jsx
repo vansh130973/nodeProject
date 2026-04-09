@@ -11,6 +11,19 @@ import {
   apiGetDashboard,
   apiEditUser,
 } from "../services/admin.service";
+import {
+  apiGetAllModules,
+  apiCreateModule,
+  apiUpdateModule,
+  apiDeleteModule,
+} from "../services/module.service";
+import {
+  apiGetAllRoles,
+  apiGetRole,
+  apiCreateRole,
+  apiUpdateRole,
+  apiDeleteRole,
+} from "../services/role.service";
 import { validateAddAdminForm } from "../validations/admin.validation";
 import { showApiError } from "../../../utils/api";
 import useAdminData from "../hooks/useAdminData";
@@ -19,7 +32,8 @@ import "bootstrap-icons/font/bootstrap-icons.css";
 
 const INITIAL_ADMIN_FORM = { userName: "", email: "", phone: "", password: "", conformPassword: "" };
 const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
-const STATUS_OPTIONS = ["all", "active", "inactive", "pending", "deleted"];
+const PERM_KEYS = ["canView", "canAdd", "canEdit", "canDelete"];
+const PERM_LABELS = { canView: "View", canAdd: "Add", canEdit: "Edit", canDelete: "Delete" };
 
 // Status badge
 const StatusBadge = ({ status }) => {
@@ -33,7 +47,11 @@ const StatusBadge = ({ status }) => {
   return <span className={`badge ${cls}`}>{label}</span>;
 };
 
-// Pagination
+const fmtDate = (iso) =>
+  iso
+    ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+    : "—";
+
 const Pagination = ({ pagination, onPageChange }) => {
   const { page, totalPages } = pagination;
   if (totalPages <= 1) return null;
@@ -116,11 +134,8 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
     setLoading(true);
     try {
       const payload = {
-        firstName: form.firstName,
-        lastName:  form.lastName,
-        email:     form.email,
-        phone:     form.phone,
-        gender:    form.gender,
+        firstName: form.firstName, lastName: form.lastName,
+        email: form.email, phone: form.phone, gender: form.gender,
         ...(form.password ? { password: form.password } : {}),
       };
       const res = await apiEditUser(editTarget.id, payload);
@@ -168,8 +183,7 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
               <label className="form-label fw-semibold">Gender</label>
               <select name="gender"
                 className={`form-select ${errors.gender ? "is-invalid" : ""}`}
-                value={form.gender}
-                onChange={handleChange}>
+                value={form.gender} onChange={handleChange}>
                 <option value="">Select Gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
@@ -245,7 +259,507 @@ const StatusDropdown = ({ userId, currentStatus, onChanged }) => {
   );
 };
 
-// Main
+// ─── Modules tab ──────────────────────────────────────────────────────────────
+
+const ModuleFormModal = ({ mode, initial, onClose, onSaved }) => {
+  const [name,   setName]   = useState(initial?.name   ?? "");
+  const [status, setStatus] = useState(initial?.status ?? "active");
+  const [busy,   setBusy]   = useState(false);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return toast.error("Module name is required");
+    setBusy(true);
+    try {
+      if (mode === "add") {
+        const res = await apiCreateModule({ name: name.trim(), status });
+        toast.success("Module created");
+        onSaved(res.module);
+      } else {
+        const res = await apiUpdateModule(initial.id, { name: name.trim(), status });
+        toast.success("Module updated");
+        onSaved(res.module);
+      }
+      onClose();
+    } catch (err) { showApiError(err, toast.error); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+      style={{ background: "rgba(0,0,0,0.45)", zIndex: 9999 }}>
+      <div className="card border-0 shadow-lg rounded-3" style={{ width: 440 }}>
+        <div className="card-header bg-warning fw-bold d-flex justify-content-between align-items-center">
+          <span>{mode === "add" ? "Add Module" : "Edit Module"}</span>
+          <button className="btn-close" onClick={onClose} />
+        </div>
+        <div className="card-body p-4">
+          <div className="mb-3">
+            <label className="form-label fw-semibold">Module Name <span className="text-danger">*</span></label>
+            <input className="form-control" placeholder="e.g. Ticket Management"
+              value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="mb-4">
+            <label className="form-label fw-semibold">Status</label>
+            <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <div className="d-flex gap-2 justify-content-end">
+            <button className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>Cancel</button>
+            <button className="btn btn-warning fw-semibold" onClick={handleSubmit} disabled={busy}>
+              {busy ? <span className="spinner-border spinner-border-sm" /> : mode === "add" ? "Add Module" : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ModulesTab = () => {
+  const [modules, setModules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal,   setModal]   = useState(null);
+  const [search,  setSearch]  = useState("");
+
+  useEffect(() => {
+    apiGetAllModules()
+      .then((r) => setModules(r.modules))
+      .catch((err) => showApiError(err, toast.error))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSaved = (saved) =>
+    setModules((prev) => {
+      const idx = prev.findIndex((m) => m.id === saved.id);
+      if (idx === -1) return [saved, ...prev];
+      const u = [...prev]; u[idx] = saved; return u;
+    });
+
+  const handleDelete = (mod) => {
+    if (!window.confirm(`Delete "${mod.name}"?\nThis removes all role permissions linked to it.`)) return;
+    apiDeleteModule(mod.id)
+      .then(() => { toast.success("Module deleted"); setModules((p) => p.filter((m) => m.id !== mod.id)); })
+      .catch((err) => showApiError(err, toast.error));
+  };
+
+  const filtered = modules.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h5 className="fw-bold mb-0">Modules</h5>
+          <small className="text-muted">Manage system modules and their availability</small>
+        </div>
+        <button className="btn btn-warning fw-semibold" onClick={() => setModal({ type: "add" })}>
+          <i className="bi bi-plus-lg me-1" /> Add Module
+        </button>
+      </div>
+
+      <div className="mb-3" style={{ maxWidth: 300 }}>
+        <input className="form-control" placeholder="Search modules..."
+          value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+
+      <div className="card border-0 shadow-sm">
+        <div className="table-responsive">
+          <table className="table table-hover align-middle mb-0">
+            <thead className="table-dark">
+              <tr>
+                <th style={{ width: 50 }}>#</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Updated</th>
+                <th style={{ width: 110 }} className="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={6} className="text-center py-5"><span className="spinner-border text-warning" /></td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-5 text-muted">
+                  {search ? "No modules match." : "No modules yet. Add one."}
+                </td></tr>
+              ) : filtered.map((m, i) => (
+                <tr key={m.id}>
+                  <td className="text-muted small">{i + 1}</td>
+                  <td className="fw-semibold">{m.name}</td>
+                  <td><StatusBadge status={m.status} /></td>
+                  <td className="text-muted small">{fmtDate(m.createdAt)}</td>
+                  <td className="text-muted small">{fmtDate(m.updatedAt)}</td>
+                  <td className="text-center">
+                    <button className="btn btn-sm btn-outline-warning me-1"
+                      onClick={() => setModal({ type: "edit", target: m })}>
+                      <i className="bi bi-pencil" />
+                    </button>
+                    <button className="btn btn-sm btn-outline-danger"
+                      onClick={() => handleDelete(m)}>
+                      <i className="bi bi-trash" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="card-footer text-muted small bg-white">{filtered.length} module{filtered.length !== 1 ? "s" : ""}</div>
+      </div>
+
+      {modal?.type === "add" && (
+        <ModuleFormModal mode="add" initial={null} onClose={() => setModal(null)} onSaved={handleSaved} />
+      )}
+      {modal?.type === "edit" && (
+        <ModuleFormModal mode="edit" initial={modal.target} onClose={() => setModal(null)} onSaved={handleSaved} />
+      )}
+    </>
+  );
+};
+
+// ─── Roles tab ────────────────────────────────────────────────────────────────
+
+const PermissionGrid = ({ modules, permissions, onChange }) => {
+  const toggle = (moduleId, key) => {
+    const current = permissions[moduleId] ?? { canView: false, canAdd: false, canEdit: false, canDelete: false };
+    onChange(moduleId, { ...current, [key]: !current[key] });
+  };
+  const toggleAll = (moduleId) => {
+    const current = permissions[moduleId] ?? {};
+    const allOn = PERM_KEYS.every((k) => current[k]);
+    onChange(moduleId, PERM_KEYS.reduce((acc, k) => ({ ...acc, [k]: !allOn }), {}));
+  };
+
+  if (modules.length === 0)
+    return <p className="text-muted small text-center py-3">No active modules. Add modules first.</p>;
+
+  return (
+    <div className="table-responsive" style={{ maxHeight: 300, overflowY: "auto" }}>
+      <table className="table table-sm table-bordered align-middle mb-0">
+        <thead className="table-light" style={{ position: "sticky", top: 0 }}>
+          <tr>
+            <th style={{ width: "40%" }}>Module</th>
+            <th className="text-center">All</th>
+            {PERM_KEYS.map((k) => <th key={k} className="text-center">{PERM_LABELS[k]}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {modules.map((mod) => {
+            const p = permissions[mod.id] ?? {};
+            const allOn = PERM_KEYS.every((k) => p[k]);
+            return (
+              <tr key={mod.id}>
+                <td className="fw-semibold small">{mod.name}</td>
+                <td className="text-center">
+                  <input type="checkbox" className="form-check-input" checked={allOn} onChange={() => toggleAll(mod.id)} />
+                </td>
+                {PERM_KEYS.map((k) => (
+                  <td key={k} className="text-center">
+                    <input type="checkbox" className="form-check-input" checked={!!p[k]} onChange={() => toggle(mod.id, k)} />
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const RoleFormModal = ({ mode, roleId, allModules, onClose, onSaved }) => {
+  const [name,        setName]        = useState("");
+  const [description, setDescription] = useState("");
+  const [status,      setStatus]      = useState("active");
+  const [permissions, setPermissions] = useState({});
+  const [loadingRole, setLoadingRole] = useState(mode === "edit");
+  const [busy,        setBusy]        = useState(false);
+
+  useEffect(() => {
+    if (mode !== "edit" || !roleId) return;
+    apiGetRole(roleId)
+      .then((res) => {
+        const r = res.role;
+        setName(r.name);
+        setDescription(r.description ?? "");
+        setStatus(r.status);
+        const map = {};
+        r.permissions.forEach((p) => {
+          map[p.moduleId] = { canView: !!p.canView, canAdd: !!p.canAdd, canEdit: !!p.canEdit, canDelete: !!p.canDelete };
+        });
+        setPermissions(map);
+      })
+      .catch((err) => { showApiError(err, toast.error); onClose(); })
+      .finally(() => setLoadingRole(false));
+  }, [mode, roleId, onClose]);
+
+  const buildPermArray = () =>
+    Object.entries(permissions)
+      .map(([moduleId, p]) => ({ moduleId: Number(moduleId), ...p }))
+      .filter((p) => p.canView || p.canAdd || p.canEdit || p.canDelete);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return toast.error("Role name is required");
+    setBusy(true);
+    try {
+      const payload = { name: name.trim(), description: description.trim() || null, status, permissions: buildPermArray() };
+      const res = mode === "add" ? await apiCreateRole(payload) : await apiUpdateRole(roleId, payload);
+      toast.success(mode === "add" ? "Role created" : "Role updated");
+      onSaved(res.role);
+      onClose();
+    } catch (err) { showApiError(err, toast.error); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+      style={{ background: "rgba(0,0,0,0.5)", zIndex: 9999 }}>
+      <div className="card border-0 shadow-lg rounded-3"
+        style={{ width: 600, maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+        <div className="card-header bg-warning fw-bold d-flex justify-content-between align-items-center">
+          <span>{mode === "add" ? "Add Role" : "Edit Role"}</span>
+          <button className="btn-close" onClick={onClose} />
+        </div>
+
+        {loadingRole ? (
+          <div className="d-flex justify-content-center align-items-center py-5">
+            <span className="spinner-border text-warning" />
+          </div>
+        ) : (
+          <>
+            <div className="card-body overflow-auto p-4">
+              <div className="row g-3 mb-3">
+                <div className="col-8">
+                  <label className="form-label fw-semibold">Role Name <span className="text-danger">*</span></label>
+                  <input className="form-control" placeholder="e.g. Support Agent"
+                    value={name} onChange={(e) => setName(e.target.value)} />
+                </div>
+                <div className="col-4">
+                  <label className="form-label fw-semibold">Status</label>
+                  <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="form-label fw-semibold">
+                  Description <span className="text-muted fw-normal small">(optional)</span>
+                </label>
+                <input className="form-control" placeholder="Short note about this role"
+                  value={description} onChange={(e) => setDescription(e.target.value)} />
+              </div>
+              <label className="form-label fw-semibold mb-2">
+                Module Permissions
+                <span className="text-muted fw-normal small ms-2">— tick what this role can do</span>
+              </label>
+              <PermissionGrid
+                modules={allModules}
+                permissions={permissions}
+                onChange={(moduleId, updated) => setPermissions((p) => ({ ...p, [moduleId]: updated }))}
+              />
+            </div>
+            <div className="card-footer bg-white d-flex gap-2 justify-content-end p-3">
+              <button className="btn btn-outline-secondary" onClick={onClose} disabled={busy}>Cancel</button>
+              <button className="btn btn-warning fw-semibold" onClick={handleSubmit} disabled={busy}>
+                {busy
+                  ? <span className="spinner-border spinner-border-sm" />
+                  : mode === "add" ? "Create Role" : "Save Changes"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ViewPermModal = ({ role, allModules, onClose }) => {
+  const [loading,  setLoading]  = useState(true);
+  const [permsMap, setPermsMap] = useState({});
+
+  useEffect(() => {
+    apiGetRole(role.id)
+      .then((res) => {
+        const map = {};
+        res.role.permissions.forEach((p) => { map[p.moduleId] = p; });
+        setPermsMap(map);
+      })
+      .catch((err) => showApiError(err, toast.error))
+      .finally(() => setLoading(false));
+  }, [role.id]);
+
+  const icon = (has) =>
+    has
+      ? <i className="bi bi-check-circle-fill text-success" />
+      : <i className="bi bi-dash text-muted" />;
+
+  return (
+    <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+      style={{ background: "rgba(0,0,0,0.45)", zIndex: 9999 }}>
+      <div className="card border-0 shadow-lg rounded-3"
+        style={{ width: 540, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+        <div className="card-header bg-dark text-white fw-bold d-flex justify-content-between align-items-center">
+          <span><i className="bi bi-shield-check me-2" />Permissions — {role.name}</span>
+          <button className="btn-close btn-close-white" onClick={onClose} />
+        </div>
+        <div className="card-body overflow-auto p-0">
+          {loading ? (
+            <div className="d-flex justify-content-center py-5">
+              <span className="spinner-border text-warning" />
+            </div>
+          ) : (
+            <table className="table table-sm table-hover align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Module</th>
+                  {PERM_KEYS.map((k) => <th key={k} className="text-center">{PERM_LABELS[k]}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {allModules.map((mod) => {
+                  const p = permsMap[mod.id] ?? {};
+                  return (
+                    <tr key={mod.id}>
+                      <td className="fw-semibold small">{mod.name}</td>
+                      {PERM_KEYS.map((k) => <td key={k} className="text-center">{icon(p[k])}</td>)}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="card-footer bg-white text-end p-3">
+          <button className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const RolesTab = () => {
+  const [roles,      setRoles]      = useState([]);
+  const [allModules, setAllModules] = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [modal,      setModal]      = useState(null);
+  const [search,     setSearch]     = useState("");
+
+  useEffect(() => {
+    Promise.all([apiGetAllRoles(), apiGetAllModules()])
+      .then(([rolesRes, modRes]) => {
+        setRoles(rolesRes.roles);
+        setAllModules(modRes.modules.filter((m) => m.status === "active"));
+      })
+      .catch((err) => showApiError(err, toast.error))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSaved = (saved) =>
+    setRoles((prev) => {
+      const idx = prev.findIndex((r) => r.id === saved.id);
+      if (idx === -1) return [saved, ...prev];
+      const u = [...prev]; u[idx] = saved; return u;
+    });
+
+  const handleDelete = (role) => {
+    if (!window.confirm(`Delete "${role.name}"?\nAll permissions linked to this role will be removed.`)) return;
+    apiDeleteRole(role.id)
+      .then(() => { toast.success("Role deleted"); setRoles((p) => p.filter((r) => r.id !== role.id)); })
+      .catch((err) => showApiError(err, toast.error));
+  };
+
+  const filtered = roles.filter((r) =>
+    r.name.toLowerCase().includes(search.toLowerCase()) ||
+    (r.description ?? "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h5 className="fw-bold mb-0">Roles</h5>
+          <small className="text-muted">Create roles and assign module-level permissions</small>
+        </div>
+        <button className="btn btn-warning fw-semibold" onClick={() => setModal({ type: "add" })}>
+          <i className="bi bi-plus-lg me-1" /> Add Role
+        </button>
+      </div>
+
+      <div className="mb-3" style={{ maxWidth: 300 }}>
+        <input className="form-control" placeholder="Search roles..."
+          value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+
+      <div className="card border-0 shadow-sm">
+        <div className="table-responsive">
+          <table className="table table-hover align-middle mb-0">
+            <thead className="table-dark">
+              <tr>
+                <th style={{ width: 50 }}>#</th>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Updated</th>
+                <th style={{ width: 140 }} className="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={7} className="text-center py-5"><span className="spinner-border text-warning" /></td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={7} className="text-center py-5 text-muted">
+                  {search ? "No roles match." : "No roles yet. Add one."}
+                </td></tr>
+              ) : filtered.map((r, i) => (
+                <tr key={r.id}>
+                  <td className="text-muted small">{i + 1}</td>
+                  <td className="fw-semibold">{r.name}</td>
+                  <td className="text-muted small">{r.description || <span className="fst-italic">—</span>}</td>
+                  <td><StatusBadge status={r.status} /></td>
+                  <td className="text-muted small">{fmtDate(r.createdAt)}</td>
+                  <td className="text-muted small">{fmtDate(r.updatedAt)}</td>
+                  <td className="text-center">
+                    <button className="btn btn-sm btn-outline-dark me-1" title="View Permissions"
+                      onClick={() => setModal({ type: "view", target: r })}>
+                      <i className="bi bi-eye" />
+                    </button>
+                    <button className="btn btn-sm btn-outline-warning me-1" title="Edit"
+                      onClick={() => setModal({ type: "edit", target: r })}>
+                      <i className="bi bi-pencil" />
+                    </button>
+                    <button className="btn btn-sm btn-outline-danger" title="Delete"
+                      onClick={() => handleDelete(r)}>
+                      <i className="bi bi-trash" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="card-footer text-muted small bg-white">{filtered.length} role{filtered.length !== 1 ? "s" : ""}</div>
+      </div>
+
+      {modal?.type === "add" && (
+        <RoleFormModal mode="add" roleId={null} allModules={allModules}
+          onClose={() => setModal(null)} onSaved={handleSaved} />
+      )}
+      {modal?.type === "edit" && (
+        <RoleFormModal mode="edit" roleId={modal.target.id} allModules={allModules}
+          onClose={() => setModal(null)} onSaved={handleSaved} />
+      )}
+      {modal?.type === "view" && (
+        <ViewPermModal role={modal.target} allModules={allModules} onClose={() => setModal(null)} />
+      )}
+    </>
+  );
+};
+
+// ─── Main AdminDashboard ──────────────────────────────────────────────────────
+
 const AdminDashboard = () => {
   const { user } = useAuth();
   const navigate  = useNavigate();
@@ -262,6 +776,8 @@ const AdminDashboard = () => {
     if (pathname === "/admin/users")     return "users";
     if (pathname === "/admin/admins")    return "admins";
     if (pathname === "/admin/add-admin") return "addAdmin";
+    if (pathname === "/admin/modules")   return "modules";
+    if (pathname === "/admin/roles")     return "roles";
     return "dashboard";
   };
   const activeTab = getActiveTab();
@@ -269,17 +785,15 @@ const AdminDashboard = () => {
   const [loadingData, setLoadingData] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [adminForm, setAdminForm]     = useState(INITIAL_ADMIN_FORM);
-  const [adminFormErrors, setAdminFormErrors] = useState({});
-  const [adminFormLoading, setAdminFormLoading] = useState(false);
-
-  // Filter + search state (users tab)
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [searchQuery,  setSearchQuery]  = useState("");
+  const [adminFormErrors,   setAdminFormErrors]   = useState({});
+  const [adminFormLoading,  setAdminFormLoading]  = useState(false);
+  const [filterStatus,      setFilterStatus]      = useState("all");
+  const [searchQuery,       setSearchQuery]       = useState("");
+  const [confirmModal,      setConfirmModal]      = useState({ show: false });
+  const [editTarget,        setEditTarget]        = useState(null);
   const searchDebounce = useRef(null);
 
-  const [confirmModal, setConfirmModal] = useState({ show: false });
   const closeConfirm = () => setConfirmModal((p) => ({ ...p, show: false }));
-  const [editTarget, setEditTarget] = useState(null);
 
   useEffect(() => {
     if (activeTab === "users") {
@@ -299,18 +813,13 @@ const AdminDashboard = () => {
       .finally(() => setLoadingData(false));
   }, [pagination.limit]);
 
-  const handleFilterChange = (status) => {
-    setFilterStatus(status);
-    applyFilter(status, searchQuery);
-  };
+  const handleFilterChange = (status) => { setFilterStatus(status); applyFilter(status, searchQuery); };
 
   const handleSearchChange = (e) => {
     const val = e.target.value;
     setSearchQuery(val);
     clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => {
-      applyFilter(filterStatus, val);
-    }, 350); // debounce 350ms
+    searchDebounce.current = setTimeout(() => applyFilter(filterStatus, val), 350);
   };
 
   const handlePageChange = useCallback((page) => {
@@ -389,6 +898,15 @@ const AdminDashboard = () => {
   };
 
   // Sidebar
+  const NAV_ITEMS = [
+    { label: "Dashboard",  path: "/admin/dashboard", tab: "dashboard", icon: "bi-speedometer2",  roles: ["ADMIN", "MASTER_ADMIN"] },
+    { label: "All Users",  path: "/admin/users",     tab: "users",     icon: "bi-people",        roles: ["ADMIN", "MASTER_ADMIN"] },
+    { label: "All Admins", path: "/admin/admins",    tab: "admins",    icon: "bi-shield-lock",   roles: ["MASTER_ADMIN"] },
+    { label: "Add Admin",  path: "/admin/add-admin", tab: "addAdmin",  icon: "bi-person-plus",   roles: ["MASTER_ADMIN"] },
+    { label: "Modules",    path: "/admin/modules",   tab: "modules",   icon: "bi-grid",          roles: ["MASTER_ADMIN"] },
+    { label: "Roles",      path: "/admin/roles",     tab: "roles",     icon: "bi-person-badge",  roles: ["MASTER_ADMIN"] },
+  ];
+
   const Sidebar = () => (
     <div className="d-flex flex-column bg-dark text-white"
       style={{ width: sidebarOpen ? 240 : 64, minHeight: "calc(100vh - 56px)", transition: "width 0.25s ease", flexShrink: 0 }}>
@@ -397,12 +915,7 @@ const AdminDashboard = () => {
         <i className={`bi ${sidebarOpen ? "bi-chevron-left" : "bi-chevron-right"}`} />
       </button>
       <nav className="flex-grow-1 py-2">
-        {[
-          { label: "Dashboard", path: "/admin/dashboard", tab: "dashboard", icon: "bi-speedometer2", roles: ["ADMIN", "MASTER_ADMIN"] },
-          { label: "All Users",  path: "/admin/users",     tab: "users",     icon: "bi-people",       roles: ["ADMIN", "MASTER_ADMIN"] },
-          { label: "All Admins", path: "/admin/admins",    tab: "admins",    icon: "bi-shield-lock",  roles: ["MASTER_ADMIN"] },
-          { label: "Add Admin",  path: "/admin/add-admin", tab: "addAdmin",  icon: "bi-person-plus",  roles: ["MASTER_ADMIN"] },
-        ]
+        {NAV_ITEMS
           .filter(({ roles }) => roles.includes(user?.role))
           .map(({ label, path, tab, icon }) => (
             <button key={tab} onClick={() => navigate(path)}
@@ -437,7 +950,7 @@ const AdminDashboard = () => {
                   { label: "Inactive Users", value: dashboardCounts.inactiveUsers, color: "#6c757d", path: null },
                   { label: "Deleted Users",  value: dashboardCounts.deletedUsers,  color: "#dc3545", path: null },
                   ...(user?.role === "MASTER_ADMIN"
-                    ? [{ label: "Total Admins", value: admins.length, color: "#fd7e14", path: "/admin/admins" }]
+                    ? [{ label: "Total Admins", value: dashboardCounts.totalAdmins, color: "#fd7e14", path: "/admin/admins" }]
                     : []),
                 ].map(({ label, value, color, path }) => (
                   <div key={label} className="col-sm-6 col-lg-4">
@@ -468,14 +981,10 @@ const AdminDashboard = () => {
             {/* Filter + Search bar */}
             <div className="card border-0 shadow-sm rounded-3 mb-3">
               <div className="card-body py-2 px-3 d-flex flex-wrap gap-2 align-items-center">
-                {/* Status filter dropdown */}
                 <div className="d-flex align-items-center gap-2">
                   <label className="form-label fw-semibold mb-0 small text-muted">Status</label>
-                  <select
-                    className="form-select form-select-sm"
-                    style={{ minWidth: 140 }}
-                    value={filterStatus}
-                    onChange={(e) => handleFilterChange(e.target.value)}>
+                  <select className="form-select form-select-sm" style={{ minWidth: 140 }}
+                    value={filterStatus} onChange={(e) => handleFilterChange(e.target.value)}>
                     <option value="all">All Users</option>
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
@@ -487,9 +996,7 @@ const AdminDashboard = () => {
                 {/* Search */}
                 <div className="ms-auto d-flex align-items-center gap-2" style={{ minWidth: 220 }}>
                   <div className="input-group input-group-sm">
-                    <span className="input-group-text bg-white">
-                      <i className="bi bi-search text-muted" />
-                    </span>
+                    <span className="input-group-text bg-white"><i className="bi bi-search text-muted" /></span>
                     <input type="text" className="form-control border-start-0"
                       placeholder="Search name, email, phone..."
                       value={searchQuery} onChange={handleSearchChange} />
@@ -503,8 +1010,6 @@ const AdminDashboard = () => {
                 </div>
               </div>
             </div>
-
-            {/* Table */}
             <div className="card border-0 shadow-sm rounded-3">
               <div className="card-body p-0">
                 {loadingData ? (
@@ -515,22 +1020,16 @@ const AdminDashboard = () => {
                       <table className="table table-bordered table-hover align-middle mb-0">
                         <thead className="table-dark">
                           <tr>
-                            <th className="text-uppercase small">#</th>
-                            <th className="text-uppercase small">Name</th>
-                            <th className="text-uppercase small">Phone</th>
-                            <th className="text-uppercase small">Email</th>
-                            <th className="text-uppercase small">Status</th>
-                            <th className="text-uppercase small text-center">Actions</th>
+                            {["#", "Name", "Phone", "Email", "Status", "Actions"].map((c) => (
+                              <th key={c} className="text-uppercase small">{c}</th>
+                            ))}
                           </tr>
                         </thead>
                         <tbody>
                           {users.length === 0 ? (
-                            <tr>
-                              <td colSpan={6} className="text-center text-muted py-5">
-                                <i className="bi bi-inbox fs-3 d-block mb-2" />
-                                No users found
-                              </td>
-                            </tr>
+                            <tr><td colSpan={6} className="text-center text-muted py-5">
+                              <i className="bi bi-inbox fs-3 d-block mb-2" />No users found
+                            </td></tr>
                           ) : users.map((u, i) => (
                             <tr key={u.id}>
                               <td className="text-muted small">{(pagination.page - 1) * pagination.limit + i + 1}</td>
@@ -598,7 +1097,7 @@ const AdminDashboard = () => {
                   <div className="table-responsive">
                     <table className="table table-bordered table-hover align-middle mb-0">
                       <thead className="table-dark">
-                        <tr>{["ID","Username","Email","Phone"].map((c) => (
+                        <tr>{["ID", "Username", "Email", "Phone"].map((c) => (
                           <th key={c} className="text-uppercase small">{c}</th>
                         ))}</tr>
                       </thead>
@@ -656,6 +1155,14 @@ const AdminDashboard = () => {
             </div>
           </div>
         );
+
+      case "modules":
+        if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
+        return <ModulesTab />;
+
+      case "roles":
+        if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
+        return <RolesTab />;
 
       default: return null;
     }
