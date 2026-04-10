@@ -42,7 +42,7 @@ export const findAdminByUsername = async (userName) => {
 export const findAdminById = async (id) => {
   try {
     const [result] = await db.query(
-      "SELECT * FROM admins WHERE id = ?",
+      "SELECT id, userName, email, phone, role, COALESCE(status, 'active') AS status FROM admins WHERE id = ?",
       [id]
     );
     return result[0] ?? null;
@@ -52,25 +52,114 @@ export const findAdminById = async (id) => {
   }
 };
 
-// ---------------- USERS ----------------
+// ─── Admin CRUD ───────────────────────────────────────────────────────────────
+
+export const getAdminsWithPaginationAndCount = async (page = 1, limit = 10, search = "") => {
+  try {
+    const offset = (page - 1) * limit;
+    const conditions = ["role != 'MASTER_ADMIN'"];
+    const params = [];
+
+    if (search && search.trim()) {
+      conditions.push("(userName LIKE ? OR email LIKE ? OR phone LIKE ?)");
+      const like = `%${search.trim()}%`;
+      params.push(like, like, like);
+    }
+
+    const where = "WHERE " + conditions.join(" AND ");
+
+    const [rowsResult, countResult] = await Promise.all([
+      db.query(
+        `SELECT id, userName, email, phone, role,
+                COALESCE(status, 'active') AS status,
+                COALESCE(createdAt, NOW()) AS createdAt
+         FROM admins ${where}
+         ORDER BY id DESC
+         LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+      ),
+      db.query(`SELECT COUNT(*) AS total FROM admins ${where}`, params),
+    ]);
+
+    const rows = rowsResult[0];
+    const total = countResult[0][0]?.total ?? 0;
+
+    return { rows, total };
+  } catch (error) {
+    console.error("getAdminsWithPaginationAndCount error:", error);
+    throw error;
+  }
+};
+
+export const updateAdminByMaster = async (id, { userName, email, phone, password }) => {
+  try {
+    if (password) {
+      await db.query(
+        "UPDATE admins SET userName=?, email=?, phone=?, password=? WHERE id=? AND role != 'MASTER_ADMIN'",
+        [userName, email, phone, password, id]
+      );
+    } else {
+      await db.query(
+        "UPDATE admins SET userName=?, email=?, phone=? WHERE id=? AND role != 'MASTER_ADMIN'",
+        [userName, email, phone, id]
+      );
+    }
+    return findAdminById(id);
+  } catch (error) {
+    console.error("updateAdminByMaster error:", error);
+    throw error;
+  }
+};
+
+export const updateAdminStatus = async (id, status) => {
+  try {
+    await db.query(
+      "UPDATE admins SET status=? WHERE id=? AND role != 'MASTER_ADMIN'",
+      [status, id]
+    );
+  } catch (error) {
+    console.error("updateAdminStatus error:", error);
+    throw error;
+  }
+};
+
+export const softDeleteAdmin = async (id) => {
+  try {
+    await db.query(
+      "UPDATE admins SET status='deleted' WHERE id=? AND role != 'MASTER_ADMIN'",
+      [id]
+    );
+    await db.query("DELETE FROM adminToken WHERE adminId=?", [id]);
+  } catch (error) {
+    console.error("softDeleteAdmin error:", error);
+    throw error;
+  }
+};
+
+export const forceLogoutAdmin = async (adminId) => {
+  try {
+    await db.query("DELETE FROM adminToken WHERE adminId=?", [adminId]);
+  } catch (error) {
+    console.error("forceLogoutAdmin error:", error);
+    throw error;
+  }
+};
+
+// ─── Users ────────────────────────────────────────────────────────────────────
 
 export const getUsersWithPaginationAndCount = async (page = 1, limit = 10, status = "", search = "") => {
   try {
     const offset = (page - 1) * limit;
-
     const conditions = [];
     const params = [];
 
-    // Status filter
     if (status && status !== "all") {
       conditions.push("status = ?");
       params.push(status);
     } else {
-      // Default: hide deleted
       conditions.push("status != 'deleted'");
     }
 
-    // Search filter
     if (search && search.trim()) {
       conditions.push(
         "(firstName LIKE ? OR lastName LIKE ? OR userName LIKE ? OR email LIKE ? OR phone LIKE ?)"
@@ -81,17 +170,15 @@ export const getUsersWithPaginationAndCount = async (page = 1, limit = 10, statu
 
     const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
 
-    // Run both queries in parallel
     const [rowsResult, countResult] = await Promise.all([
       db.query(
         `SELECT id, firstName, lastName, userName, phone, email, gender, status, profilePicture, createdAt
-         FROM users
-         ${where}
+         FROM users ${where}
          ORDER BY id DESC
          LIMIT ? OFFSET ?`,
         [...params, limit, offset]
       ),
-      db.query(`SELECT COUNT(*) AS total FROM users ${where}`, params)
+      db.query(`SELECT COUNT(*) AS total FROM users ${where}`, params),
     ]);
 
     const rows = rowsResult[0];
@@ -104,57 +191,18 @@ export const getUsersWithPaginationAndCount = async (page = 1, limit = 10, statu
   }
 };
 
-// export const getUsersCount = async (status = "", search = "") => {
-//   try {
-//     const conditions = [];
-//     const params = [];
-
-//     if (status && status !== "all") {
-//       conditions.push("status = ?");
-//       params.push(status);
-//     }
-
-//     if (!status || status === "all") {
-//       conditions.push("status != 'deleted'");
-//     }
-
-//     if (search && search.trim()) {
-//       conditions.push("(firstName LIKE ? OR lastName LIKE ? OR userName LIKE ? OR email LIKE ? OR phone LIKE ?)");
-//       const like = `%${search.trim()}%`;
-//       params.push(like, like, like, like, like);
-//     }
-
-//     const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
-
-//     const [[{ total }]] = await db.query(
-//       `SELECT COUNT(*) AS total FROM users ${where}`,
-//       params
-//     );
-
-//     return total;
-//   } catch (error) {
-//     console.error("getUsersCount error:", error);
-//     throw error;
-//   }
-// };
-
-// ---------------- SINGLE USER ----------------
-
 export const findUserByIdAdmin = async (id) => {
   try {
     const [result] = await db.query(
       "SELECT id, firstName, lastName, userName, email, phone, status, gender, profilePicture, createdAt FROM users WHERE id = ?",
       [id]
     );
-
     return result[0] ?? null;
   } catch (error) {
     console.error("findUserByIdAdmin error:", error);
     throw error;
   }
 };
-
-// ---------------- STATUS ----------------
 
 export const updateUserStatus = async (id, status) => {
   try {
@@ -168,23 +216,18 @@ export const updateUserStatus = async (id, status) => {
   }
 };
 
-// ---------------- DELETE ----------------
-
 export const softDeleteUser = async (id) => {
   try {
     await db.query(
       "UPDATE users SET status = 'deleted', updatedAt = NOW() WHERE id = ?",
       [id]
     );
-
     await db.query("DELETE FROM userToken WHERE userId = ?", [id]);
   } catch (error) {
     console.error("softDeleteUser error:", error);
     throw error;
   }
 };
-
-// ---------------- FORCE LOGOUT ----------------
 
 export const forceLogoutUser = async (userId) => {
   try {
@@ -194,8 +237,6 @@ export const forceLogoutUser = async (userId) => {
     throw error;
   }
 };
-
-// ---------------- ADMINS ----------------
 
 export const getAllAdmins = async () => {
   try {
@@ -213,14 +254,11 @@ export const getDashboardCounts = async () => {
   try {
     const [[result]] = await db.query(`
       SELECT
-        /* USERS */
         (SELECT COUNT(*) FROM users) AS totalUsers,
         (SELECT COUNT(*) FROM users WHERE status = 'active') AS activeUsers,
         (SELECT COUNT(*) FROM users WHERE status = 'pending') AS pendingUsers,
         (SELECT COUNT(*) FROM users WHERE status = 'inactive') AS inactiveUsers,
         (SELECT COUNT(*) FROM users WHERE status = 'deleted') AS deletedUsers,
-
-        /* ADMINS */
         (SELECT COUNT(*) FROM admins WHERE role != 'MASTER_ADMIN') AS totalAdmins
     `);
     return result;
@@ -229,15 +267,6 @@ export const getDashboardCounts = async () => {
     throw error;
   }
 };
-
-export const getAdminsCount = async () => {
-  const [rows] = await db.query(
-    "SELECT COUNT(*) as count FROM admins WHERE status != 'deleted'"
-  );
-  return rows[0].count;
-};
-
-// ---------------- UPDATE USER ----------------
 
 export const updateUserByAdmin = async (id, { firstName, lastName, email, phone, gender, password }) => {
   try {
@@ -252,7 +281,6 @@ export const updateUserByAdmin = async (id, { firstName, lastName, email, phone,
         [firstName, lastName, email, phone, gender, id]
       );
     }
-
     return findUserByIdAdmin(id);
   } catch (error) {
     console.error("updateUserByAdmin error:", error);
@@ -260,7 +288,7 @@ export const updateUserByAdmin = async (id, { firstName, lastName, email, phone,
   }
 };
 
-// ---------------- TOKEN ----------------
+// ─── Tokens ───────────────────────────────────────────────────────────────────
 
 export const saveAdminToken = async (adminId, token) => {
   try {

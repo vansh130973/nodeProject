@@ -20,13 +20,13 @@ export const apiAddAdmin = (body) =>
     body: JSON.stringify(body),
   }).then(handleResponse);
 
-// Single API for all dashboard counts
 export const apiGetDashboard = () =>
   fetch(`${BASE_URL}/admin/dashboard`, {
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
-// User listing — supports page, limit, status filter, search
+// ─── Users ────────────────────────────────────────────────────────────────────
+
 export const apiGetAllUsers = ({ page = 1, limit = 10, status = "", search = "" } = {}) => {
   const params = new URLSearchParams({ page, limit });
   if (status) params.set("status", status);
@@ -43,7 +43,6 @@ export const apiEditUser = (id, body) =>
     body: JSON.stringify(body),
   }).then(handleResponse);
 
-// Update status only
 export const apiUpdateUserStatus = (id, status) =>
   fetch(`${BASE_URL}/admin/users/${id}/status`, {
     method: "PATCH",
@@ -51,21 +50,55 @@ export const apiUpdateUserStatus = (id, status) =>
     body: JSON.stringify({ status }),
   }).then(handleResponse);
 
-// Soft delete
 export const apiDeleteUser = (id) =>
   fetch(`${BASE_URL}/admin/users/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
-// Force logout user
 export const apiLogoutUserByAdmin = (id) =>
   fetch(`${BASE_URL}/admin/users/${id}/logout`, {
     method: "POST",
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
+// ─── Admins ───────────────────────────────────────────────────────────────────
+
 export const apiGetAllAdmins = () =>
   fetch(`${BASE_URL}/admin/showAllAdmins`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+export const apiGetAdminsWithPagination = ({ page = 1, limit = 10, search = "" } = {}) => {
+  const params = new URLSearchParams({ page, limit });
+  if (search) params.set("search", search);
+  return fetch(`${BASE_URL}/admin/admins?${params}`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+};
+
+export const apiEditAdmin = (id, body) =>
+  fetch(`${BASE_URL}/admin/admins/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(body),
+  }).then(handleResponse);
+
+export const apiUpdateAdminStatus = (id, status) =>
+  fetch(`${BASE_URL}/admin/admins/${id}/status`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ status }),
+  }).then(handleResponse);
+
+export const apiDeleteAdmin = (id) =>
+  fetch(`${BASE_URL}/admin/admins/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+export const apiLogoutAdminByMaster = (id) =>
+  fetch(`${BASE_URL}/admin/admins/${id}/logout`, {
+    method: "POST",
     headers: getAuthHeaders(),
   }).then(handleResponse);

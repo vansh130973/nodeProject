@@ -10,6 +10,12 @@ import {
   deleteUser,
   logoutUserByAdmin,
   showAllAdmins,
+  showAdminsWithPagination,
+  getAdminById,
+  editAdmin,
+  changeAdminStatus,
+  deleteAdmin,
+  logoutAdminByMaster,
   editUser,
 } from "./controllers/admin.controller.js";
 import { validate } from "../../middlewares/validate.js";
@@ -19,20 +25,35 @@ import {
   loginAdminSchema,
   updateUserStatusSchema,
   editUserSchema,
+  editAdminSchema,
+  updateAdminStatusSchema,
 } from "./validations/admin.validation.js";
 
 const router = express.Router();
 
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 router.post("/login",   validate(loginAdminSchema), loginAdmin);
 router.post("/logout",  authenticate, logoutAdmin);
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 router.get("/dashboard", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), getDashboard);
-router.post("/addAdmin", authenticate, roleCheck("MASTER_ADMIN"), validate(addAdminSchema), addAdmin);
-router.get("/showAllAdmins", authenticate, roleCheck("MASTER_ADMIN"), showAllAdmins);
-router.get("/users", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), showAllUsers);
-router.get("/users/:id", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), getUserById);
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+router.get("/users",              authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), showAllUsers);
+router.get("/users/:id",          authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), getUserById);
+router.put("/users/:id",          authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), validate(editUserSchema), editUser);
 router.patch("/users/:id/status", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), validate(updateUserStatusSchema), changeUserStatus);
-router.delete("/users/:id", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), deleteUser);
-router.put("/users/:id", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), validate(editUserSchema), editUser);
-router.post("/users/:id/logout", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), logoutUserByAdmin);
+router.delete("/users/:id",       authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), deleteUser);
+router.post("/users/:id/logout",  authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), logoutUserByAdmin);
+
+// ─── Admins ───────────────────────────────────────────────────────────────────
+router.post("/addAdmin",             authenticate, roleCheck("MASTER_ADMIN"), validate(addAdminSchema), addAdmin);
+router.get("/showAllAdmins",         authenticate, roleCheck("MASTER_ADMIN"), showAllAdmins);
+router.get("/admins",                authenticate, roleCheck("MASTER_ADMIN"), showAdminsWithPagination);
+router.get("/admins/:id",            authenticate, roleCheck("MASTER_ADMIN"), getAdminById);
+router.put("/admins/:id",            authenticate, roleCheck("MASTER_ADMIN"), validate(editAdminSchema), editAdmin);
+router.patch("/admins/:id/status",   authenticate, roleCheck("MASTER_ADMIN"), validate(updateAdminStatusSchema), changeAdminStatus);
+router.delete("/admins/:id",         authenticate, roleCheck("MASTER_ADMIN"), deleteAdmin);
+router.post("/admins/:id/logout",    authenticate, roleCheck("MASTER_ADMIN"), logoutAdminByMaster);
 
 export default router;
