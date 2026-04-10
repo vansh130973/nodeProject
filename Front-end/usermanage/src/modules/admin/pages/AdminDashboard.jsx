@@ -1377,14 +1377,14 @@ const AdminDashboard = () => {
                       <table className="table table-bordered table-hover align-middle mb-0">
                         <thead className="table-dark">
                           <tr>
-                            {["#", "Username", "Email", "Phone", "Status", "Created", "Actions"].map((c) => (
+                            {["#", "Username", "Email", "Phone", "Created", "Actions"].map((c) => (
                               <th key={c} className="text-uppercase small">{c}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {admins.length === 0 ? (
-                            <tr><td colSpan={7} className="text-center text-muted py-5">
+                            <tr><td colSpan={6} className="text-center text-muted py-5">
                               <i className="bi bi-inbox fs-3 d-block mb-2" />
                               {adminSearch ? "No admins match your search" : "No admins found"}
                             </td></tr>
@@ -1397,18 +1397,6 @@ const AdminDashboard = () => {
                               </td>
                               <td className="small">{a.email}</td>
                               <td className="small">{a.phone}</td>
-                              <td>
-                                <div className="d-flex align-items-center gap-2">
-                                  <StatusBadge status={a.status ?? "active"} />
-                                  {a.status !== "deleted" && (
-                                    <AdminStatusDropdown
-                                      adminId={a.id}
-                                      currentStatus={a.status ?? "active"}
-                                      onChanged={handleAdminStatusChanged}
-                                    />
-                                  )}
-                                </div>
-                              </td>
                               <td className="text-muted small">{fmtDate(a.createdAt)}</td>
                               <td>
                                 <div className="d-flex gap-1 justify-content-center">
@@ -1421,10 +1409,6 @@ const AdminDashboard = () => {
                                       <button className="btn btn-sm btn-outline-danger" title="Delete admin"
                                         onClick={() => handleDeleteAdmin(a.id, a.userName)}>
                                         <i className="bi bi-trash" />
-                                      </button>
-                                      <button className="btn btn-sm btn-outline-warning" title="Force logout"
-                                        onClick={() => handleLogoutAdmin(a.id, a.userName)}>
-                                        <i className="bi bi-box-arrow-right" />
                                       </button>
                                     </>
                                   )}

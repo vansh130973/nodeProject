@@ -7,9 +7,7 @@ import {
   findAdminById,
   getAdminsWithPaginationAndCount,
   updateAdminByMaster,
-  updateAdminStatus,
   softDeleteAdmin,
-  forceLogoutAdmin,
   findUserByIdAdmin,
   updateUserStatus,
   softDeleteUser,
@@ -281,30 +279,6 @@ export const editAdmin = async (req, res) => {
   }
 };
 
-export const changeAdminStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const allowed = ["active", "inactive"];
-    if (!allowed.includes(status))
-      return sendErrorResponse(res, "Invalid status. Must be active or inactive", 400);
-
-    const admin = await findAdminById(id);
-    if (!admin) return sendErrorResponse(res, "Admin not found", 404);
-    if (admin.role === "MASTER_ADMIN") return sendErrorResponse(res, "Cannot change MASTER_ADMIN status", 403);
-    if (admin.status === "deleted") return sendErrorResponse(res, "Cannot update deleted admin", 400);
-
-    await updateAdminStatus(id, status);
-    if (status !== "active") await forceLogoutAdmin(id);
-
-    return sendSuccessResponse(res, `Admin status updated to '${status}'`);
-  } catch (error) {
-    console.error("changeAdminStatus error:", error);
-    return sendErrorResponse(res, "Server error", 500);
-  }
-};
-
 export const deleteAdmin = async (req, res) => {
   try {
     const { id } = req.params;
@@ -318,22 +292,6 @@ export const deleteAdmin = async (req, res) => {
     return sendSuccessResponse(res, "Admin deleted successfully");
   } catch (error) {
     console.error("deleteAdmin error:", error);
-    return sendErrorResponse(res, "Server error", 500);
-  }
-};
-
-export const logoutAdminByMaster = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const admin = await findAdminById(id);
-    if (!admin) return sendErrorResponse(res, "Admin not found", 404);
-    if (admin.role === "MASTER_ADMIN") return sendErrorResponse(res, "Cannot force logout MASTER_ADMIN", 403);
-
-    await forceLogoutAdmin(id);
-    return sendSuccessResponse(res, "Admin logged out successfully");
-  } catch (error) {
-    console.error("logoutAdminByMaster error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };

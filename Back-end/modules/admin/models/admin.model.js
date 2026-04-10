@@ -111,17 +111,6 @@ export const updateAdminByMaster = async (id, { userName, email, phone, password
   }
 };
 
-export const updateAdminStatus = async (id, status) => {
-  try {
-    await db.query(
-      "UPDATE admins SET status=? WHERE id=? AND role != 'MASTER_ADMIN'",
-      [status, id]
-    );
-  } catch (error) {
-    console.error("updateAdminStatus error:", error);
-    throw error;
-  }
-};
 
 export const softDeleteAdmin = async (id) => {
   try {
@@ -132,15 +121,6 @@ export const softDeleteAdmin = async (id) => {
     await db.query("DELETE FROM adminToken WHERE adminId=?", [id]);
   } catch (error) {
     console.error("softDeleteAdmin error:", error);
-    throw error;
-  }
-};
-
-export const forceLogoutAdmin = async (adminId) => {
-  try {
-    await db.query("DELETE FROM adminToken WHERE adminId=?", [adminId]);
-  } catch (error) {
-    console.error("forceLogoutAdmin error:", error);
     throw error;
   }
 };

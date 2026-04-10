@@ -13,9 +13,7 @@ import {
   showAdminsWithPagination,
   getAdminById,
   editAdmin,
-  changeAdminStatus,
   deleteAdmin,
-  logoutAdminByMaster,
   editUser,
 } from "./controllers/admin.controller.js";
 import { validate } from "../../middlewares/validate.js";
@@ -26,7 +24,6 @@ import {
   updateUserStatusSchema,
   editUserSchema,
   editAdminSchema,
-  updateAdminStatusSchema,
 } from "./validations/admin.validation.js";
 
 const router = express.Router();
@@ -52,8 +49,6 @@ router.get("/showAllAdmins",         authenticate, roleCheck("MASTER_ADMIN"), sh
 router.get("/admins",                authenticate, roleCheck("MASTER_ADMIN"), showAdminsWithPagination);
 router.get("/admins/:id",            authenticate, roleCheck("MASTER_ADMIN"), getAdminById);
 router.put("/admins/:id",            authenticate, roleCheck("MASTER_ADMIN"), validate(editAdminSchema), editAdmin);
-router.patch("/admins/:id/status",   authenticate, roleCheck("MASTER_ADMIN"), validate(updateAdminStatusSchema), changeAdminStatus);
 router.delete("/admins/:id",         authenticate, roleCheck("MASTER_ADMIN"), deleteAdmin);
-router.post("/admins/:id/logout",    authenticate, roleCheck("MASTER_ADMIN"), logoutAdminByMaster);
 
 export default router;

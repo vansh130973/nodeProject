@@ -74,10 +74,3 @@ export const editAdminSchema = Joi.object({
     then: Joi.string().pattern(PASSWORD_PATTERN).messages({ "string.pattern.base": PASSWORD_MSG }),
   }),
 });
-
-export const updateAdminStatusSchema = Joi.object({
-  status: Joi.string().valid("active", "inactive").required().messages({
-    "any.only":     "Status must be one of: active, inactive",
-    "string.empty": "Status is required",
-  }),
-});
