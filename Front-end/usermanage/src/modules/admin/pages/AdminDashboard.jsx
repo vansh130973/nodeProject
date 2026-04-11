@@ -937,6 +937,7 @@ const AdminDashboard = () => {
     pagination, fetchUsers,
     admins, setAdmins, fetchAdmins,
     dashboardCounts, setDashboardCounts,
+    fetchDashboard,
   } = useAdminData();
 
   const getActiveTab = () => {
@@ -969,7 +970,9 @@ const AdminDashboard = () => {
 
   // ─── Fetch data on tab change ───────────────────────────────────────────────
   useEffect(() => {
-    if (activeTab === "users") {
+    if (activeTab === "dashboard") {
+      fetchDashboard();
+    } else if (activeTab === "users") {
       setLoadingData(true);
       fetchUsers(1, 10, filterStatus === "all" ? "" : filterStatus, searchQuery)
         .finally(() => setLoadingData(false));
@@ -1003,7 +1006,7 @@ const AdminDashboard = () => {
 
   const handleStatusChanged = useCallback((userId, newStatus) => {
     setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, status: newStatus } : u));
-    apiGetDashboard().then((r) => setDashboardCounts(r.data)).catch(() => {});
+    fetchDashboard();
   }, []); // eslint-disable-line
 
   const handleEditSaved = useCallback((updatedUser) => {
@@ -1020,7 +1023,7 @@ const AdminDashboard = () => {
           await apiDeleteUser(userId);
           toast.success("User deleted");
           setUsers((prev) => prev.filter((u) => u.id !== userId));
-          apiGetDashboard().then((r) => setDashboardCounts(r.data)).catch(() => {});
+          fetchDashboard();
         } catch (err) { showApiError(err, (m) => toast.error(m)); }
       },
     });
@@ -1099,7 +1102,7 @@ const AdminDashboard = () => {
 
   const handleAdminStatusChanged = useCallback((adminId, newStatus) => {
     setAdmins((prev) => prev.map((a) => a.id === adminId ? { ...a, status: newStatus } : a));
-    apiGetDashboard().then((r) => setDashboardCounts(r.data)).catch(() => {});
+    fetchDashboard();
   }, []); // eslint-disable-line
 
   const handleEditAdminSaved = useCallback((updatedAdmin) => {
@@ -1116,7 +1119,7 @@ const AdminDashboard = () => {
           await apiDeleteAdmin(adminId);
           toast.success("Admin deleted");
           setAdmins((prev) => prev.filter((a) => a.id !== adminId));
-          apiGetDashboard().then((r) => setDashboardCounts(r.data)).catch(() => {});
+          fetchDashboard();
         } catch (err) { showApiError(err, (m) => toast.error(m)); }
       },
     });

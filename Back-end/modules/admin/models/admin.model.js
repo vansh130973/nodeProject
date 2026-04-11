@@ -1,4 +1,5 @@
 import db from "../../../config/db.js";
+import { normalize } from "../helpers/admin.helper.js";
 
 export const findAdminByEmailOrUsername = async (email, userName) => {
   try {
@@ -59,10 +60,11 @@ export const getAdminsWithPaginationAndCount = async (page = 1, limit = 10, sear
     const offset = (page - 1) * limit;
     const conditions = ["role != 'MASTER_ADMIN'"];
     const params = [];
+    const normalizedSearch = normalize(search);
 
-    if (search && search.trim()) {
+    if (normalizedSearch) {
       conditions.push("(userName LIKE ? OR email LIKE ? OR phone LIKE ?)");
-      const like = `%${search.trim()}%`;
+      const like = `%${normalizedSearch}%`;
       params.push(like, like, like);
     }
 
@@ -140,11 +142,12 @@ export const getUsersWithPaginationAndCount = async (page = 1, limit = 10, statu
       conditions.push("status != 'deleted'");
     }
 
-    if (search && search.trim()) {
+    const normalizedSearch = normalize(search);
+    if (normalizedSearch) {
       conditions.push(
         "(firstName LIKE ? OR lastName LIKE ? OR userName LIKE ? OR email LIKE ? OR phone LIKE ?)"
       );
-      const like = `%${search.trim()}%`;
+      const like = `%${normalizedSearch}%`;
       params.push(like, like, like, like, like);
     }
 

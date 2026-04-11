@@ -20,14 +20,17 @@ const useAdminData = () => {
       navigate("/admin/login");
       return;
     }
-    if (didInit.current) return;
     didInit.current = true;
-
-    // Session errors are handled globally in api.js — only show toast for other failures
-    apiGetDashboard()
-      .then((res) => setDashboardCounts(res.data))
-      .catch((err) => { if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m)); });
   }, [user, navigate]);
+
+  const fetchDashboard = async () => {
+    try {
+      const res = await apiGetDashboard();
+      setDashboardCounts(res.data);
+    } catch (err) {
+      if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m));
+    }
+  };
 
   const fetchUsers = async (page = 1, limit = 10, status = "", search = "") => {
     try {
@@ -56,6 +59,7 @@ const useAdminData = () => {
     admins, setAdmins,
     fetchAdmins,
     dashboardCounts, setDashboardCounts,
+    fetchDashboard,
   };
 };
 

@@ -5,3 +5,8 @@ export const formatAdminData = (admin) => ({
   phone: admin.phone,
   role: admin.role,
 });
+
+// Trim single value
+export const normalize = (value) => {
+  return typeof value === "string" ? value.trim() : value;
+};
