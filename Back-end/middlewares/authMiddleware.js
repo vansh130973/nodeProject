@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { findUserToken } from "../modules/user/models/user.model.js";
 import { findAdminToken } from "../modules/admin/models/admin.model.js";
-import { getPermission } from "../modules/role/role.model.js";
+import { getPermission } from "../modules/role/models/role.model.js";
 import { sendErrorResponse } from "../utils/response.js";
 
 // ─── authenticate ─────────────────────────────────────────────────────────────

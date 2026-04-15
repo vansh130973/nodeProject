@@ -5,8 +5,8 @@ import {
   insertModule,
   updateModule,
   deleteModule,
-} from "./module.model.js";
-import { sendSuccessResponse, sendErrorResponse } from "../../utils/response.js";
+} from "../models/module.model.js";
+import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
 
 export const listModules = async (req, res) => {
   try {

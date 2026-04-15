@@ -2,7 +2,7 @@ import express from "express";
 import { authenticate, roleCheck } from "../../middlewares/authMiddleware.js";
 import { validate } from "../../middlewares/validate.js";
 import { createRoleSchema, updateRoleSchema } from "./validations/role.validation.js";
-import { listRoles, getRole, createRole, editRole, removeRole } from "./role.controller.js";
+import { listRoles, getRole, createRole, editRole, removeRole } from "./controllers/role.controller.js";
 
 const router = express.Router();
 

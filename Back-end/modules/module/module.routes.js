@@ -2,7 +2,7 @@ import express from "express";
 import { authenticate, roleCheck } from "../../middlewares/authMiddleware.js";
 import { validate } from "../../middlewares/validate.js";
 import { createModuleSchema, updateModuleSchema } from "./validations/module.validation.js";
-import { listModules, getModule, createModule, editModule, removeModule } from "./module.controller.js";
+import { listModules, getModule, createModule, editModule, removeModule } from "./controllers/module.controller.js";
 
 const router = express.Router();
 
