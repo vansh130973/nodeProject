@@ -14,20 +14,40 @@ import {
   forceLogoutUser,
   getAllAdmins,
   getDashboardCounts,
+  getAdminPermissions,
   saveAdminToken,
   deleteAdminToken,
   updateUserByAdmin,
   getUsersWithPaginationAndCount,
 } from "../models/admin.model.js";
+import { findRoleById } from "../../role/models/role.model.js";
 
 import { formatAdminData } from "../helpers/admin.helper.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
+
+const parseLimit = (value, fallback = 10) => {
+  if (String(value).toLowerCase() === "all") return "all";
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.min(100, Math.max(1, parsed));
+};
+
+const buildPermissionMap = (permissions) =>
+  permissions.reduce((acc, p) => {
+    acc[String(p.moduleName || "").toLowerCase()] = {
+      canView: !!p.canView,
+      canAdd: !!p.canAdd,
+      canEdit: !!p.canEdit,
+      canDelete: !!p.canDelete,
+    };
+    return acc;
+  }, {});
 
 // ─── ADD ADMIN ────────────────────────────────────────────────────────────────
 
 export const addAdmin = async (req, res) => {
   try {
-    const { userName, password, phone, email } = req.body;
+    const { userName, password, phone, email, roleId } = req.body;
 
     const existingUsers = await findAdminByEmailOrUsername(email, userName);
     if (existingUsers.length > 0) {
@@ -37,12 +57,17 @@ export const addAdmin = async (req, res) => {
         return sendErrorResponse(res, "Username already taken", 409);
     }
 
+    const role = await findRoleById(roleId);
+    if (!role || role.status !== "active" || role.isDeleted) {
+      return sendErrorResponse(res, "Selected role is invalid or inactive", 400);
+    }
+
     const hashedPassword = await bcrypt.hash(String(password), 10);
-    const insertedAdmin = await insertAdmin(userName, hashedPassword, email, phone);
+    const insertedAdmin = await insertAdmin(userName, hashedPassword, email, phone, roleId);
 
     return sendSuccessResponse(res, "Admin registered successfully", {
       admin: formatAdminData(insertedAdmin),
-    }, undefined, 201);
+    }, 201);
 
   } catch (error) {
     console.error("addAdmin error:", error);
@@ -67,10 +92,12 @@ export const loginAdmin = async (req, res) => {
     const isMatch = await bcrypt.compare(String(password), admin.password);
     if (!isMatch) return sendErrorResponse(res, "Invalid password", 401);
 
-    const token = jwt.sign(formatAdminData(admin), process.env.JWT_SECRET, { expiresIn: "1h" });
+    const permissions = admin.role === "ADMIN" ? await getAdminPermissions(admin.roleId) : [];
+    const tokenPayload = formatAdminData({ ...admin, permissions: buildPermissionMap(permissions) });
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: "1h" });
     await saveAdminToken(admin.id, token);
 
-    return sendSuccessResponse(res, "Login successful", {}, token, 200);
+    return sendSuccessResponse(res, "Login successful", {token}, 200);
 
   } catch (error) {
     console.error("loginAdmin error:", error);
@@ -102,17 +129,41 @@ export const getDashboard = async (req, res) => {
   }
 };
 
+export const getMyPermissions = async (req, res) => {
+  try {
+    if (req.user.role === "MASTER_ADMIN") {
+      return sendSuccessResponse(res, "Permissions fetched successfully", {
+        permissions: {},
+        isMasterAdmin: true,
+      });
+    }
+
+    if (req.user.role !== "ADMIN") {
+      return sendErrorResponse(res, "Access denied.", 403);
+    }
+
+    const permissions = await getAdminPermissions(req.user.roleId);
+    return sendSuccessResponse(res, "Permissions fetched successfully", {
+      permissions: buildPermissionMap(permissions),
+      isMasterAdmin: false,
+    });
+  } catch (error) {
+    console.error("getMyPermissions error:", error);
+    return sendErrorResponse(res, "Server error", 500);
+  }
+};
+
 // ─── USERS ────────────────────────────────────────────────────────────────────
 
 export const showAllUsers = async (req, res) => {
   try {
     const page   = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const limit  = parseLimit(req.query.limit, 10);
     const status = req.query.status || "";
     const search = req.query.search || "";
 
     const { rows: users, total } = await getUsersWithPaginationAndCount(page, limit, status, search);
-    const totalPages = Math.ceil(total / limit);
+    const totalPages = limit === "all" ? 1 : Math.ceil(total / limit);
 
     return sendSuccessResponse(res, "Users fetched successfully", {
       users,
@@ -222,11 +273,11 @@ export const showAllAdmins = async (req, res) => {
 export const showAdminsWithPagination = async (req, res) => {
   try {
     const page   = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const limit  = parseLimit(req.query.limit, 10);
     const search = req.query.search || "";
 
     const { rows: admins, total } = await getAdminsWithPaginationAndCount(page, limit, search);
-    const totalPages = Math.ceil(total / limit);
+    const totalPages = limit === "all" ? 1 : Math.ceil(total / limit);
 
     return sendSuccessResponse(res, "Admins fetched successfully", {
       admins,
@@ -253,7 +304,12 @@ export const getAdminById = async (req, res) => {
 export const editAdmin = async (req, res) => {
   try {
     const { id } = req.params;
-    const { userName, email, phone, password } = req.body;
+    const { userName, email, phone, password, roleId } = req.body;
+    const role = await findRoleById(roleId);
+    if (!role || role.status !== "active" || role.isDeleted) {
+      return sendErrorResponse(res, "Selected role is invalid or inactive", 400);
+    }
+
 
     const admin = await findAdminById(id);
     if (!admin) return sendErrorResponse(res, "Admin not found", 404);
@@ -271,7 +327,13 @@ export const editAdmin = async (req, res) => {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    const updated = await updateAdminByMaster(id, { userName, email, phone, password: hashedPassword });
+    const updated = await updateAdminByMaster(id, {
+      userName,
+      email,
+      phone,
+      password: hashedPassword,
+      roleId,
+    });
     return sendSuccessResponse(res, "Admin updated successfully", { admin: formatAdminData(updated) });
   } catch (error) {
     console.error("editAdmin error:", error);
@@ -292,6 +354,68 @@ export const deleteAdmin = async (req, res) => {
     return sendSuccessResponse(res, "Admin deleted successfully");
   } catch (error) {
     console.error("deleteAdmin error:", error);
+    return sendErrorResponse(res, "Server error", 500);
+  }
+};
+// ─── OWN PROFILE ─────────────────────────────────────────────────────────────
+
+import {
+  updateAdminOwnProfile,
+  updateAdminPassword,
+  findAdminWithPasswordById,
+} from "../models/admin.model.js";
+
+export const getAdminProfile = async (req, res) => {
+  try {
+    const admin = await findAdminById(req.user.id);
+    if (!admin) return sendErrorResponse(res, "Admin not found", 404);
+    return sendSuccessResponse(res, "Profile fetched", { admin });
+  } catch (error) {
+    console.error("getAdminProfile error:", error);
+    return sendErrorResponse(res, "Server error", 500);
+  }
+};
+
+export const editAdminProfile = async (req, res) => {
+  try {
+    const id = req.user.id;
+    const { userName, email, phone } = req.body;
+
+    // Check uniqueness (exclude self)
+    const existing = await findAdminByEmailOrUsername(email, userName);
+    const conflict = existing.filter((a) => a.id !== id);
+    if (conflict.some((a) => a.email === email))
+      return sendErrorResponse(res, "Email already in use", 409);
+    if (conflict.some((a) => a.userName === userName))
+      return sendErrorResponse(res, "Username already taken", 409);
+
+    const updated = await updateAdminOwnProfile(id, { userName, email, phone });
+    return sendSuccessResponse(res, "Profile updated", { admin: updated });
+  } catch (error) {
+    console.error("editAdminProfile error:", error);
+    return sendErrorResponse(res, "Server error", 500);
+  }
+};
+
+export const changeAdminOwnPassword = async (req, res) => {
+  try {
+    const id = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    const admin = await findAdminWithPasswordById(id);
+    if (!admin) return sendErrorResponse(res, "Admin not found", 404);
+
+    const match = await bcrypt.compare(String(currentPassword), admin.password);
+    if (!match) return sendErrorResponse(res, "Current password is incorrect", 400);
+
+    const hashed = await bcrypt.hash(String(newPassword), 10);
+    await updateAdminPassword(id, hashed);
+    // Invalidate all tokens
+    await deleteAdminToken(id);
+
+    return sendSuccessResponse(res, "Password changed. Please login again.");
+  } catch (error) {
+    console.error("changeAdminOwnPassword error:", error);
     return sendErrorResponse(res, "Server error", 500);
   }
 };

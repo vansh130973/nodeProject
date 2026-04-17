@@ -4,6 +4,9 @@ export const formatAdminData = (admin) => ({
   email: admin.email,
   phone: admin.phone,
   role: admin.role,
+  roleId: admin.roleId ?? null,
+  roleName: admin.roleName ?? null,
+  permissions: admin.permissions ?? {},
 });
 
 // Trim single value

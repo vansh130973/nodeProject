@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
@@ -9,12 +9,12 @@ import {
   apiEditAdmin,
   apiUpdateAdminStatus,
   apiDeleteAdmin,
-  apiLogoutAdminByMaster,
   apiUpdateUserStatus,
   apiDeleteUser,
-  apiLogoutUserByAdmin,
-  apiGetDashboard,
   apiEditUser,
+  apiGetAdminPermissions,
+  apiEditAdminProfile,
+  apiChangeAdminPassword,
 } from "../services/admin.service";
 import {
   apiGetAllModules,
@@ -35,10 +35,13 @@ import useAdminData from "../hooks/useAdminData";
 import InputField from "../../../components/InputField";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
-const INITIAL_ADMIN_FORM = { userName: "", email: "", phone: "", password: "", conformPassword: "" };
+const INITIAL_ADMIN_FORM = { userName: "", email: "", phone: "", roleId: "", password: "", conformPassword: "" };
 const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
 const PERM_KEYS = ["canView", "canAdd", "canEdit", "canDelete"];
 const PERM_LABELS = { canView: "View", canAdd: "Add", canEdit: "Edit", canDelete: "Delete" };
+const PAGE_SIZE_OPTIONS = [5, 10, 50, "all"];
+const normalizeModuleName = (value = "") =>
+  String(value).trim().toLowerCase().replace(/[\s_-]+/g, "");
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
@@ -51,6 +54,92 @@ const StatusBadge = ({ status }) => {
   };
   const { cls, label } = map[status] ?? { cls: "bg-light text-dark", label: status };
   return <span className={`badge ${cls}`}>{label}</span>;
+};
+
+const StatusBadgeDropdown = ({ userId, currentStatus, onChanged }) => {
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  
+  const statusMap = {
+    active:   { cls: "bg-success",          label: "Active"   },
+    pending:  { cls: "bg-warning text-dark", label: "Pending"  },
+    inactive: { cls: "bg-secondary",         label: "Inactive" },
+    deleted:  { cls: "bg-danger",            label: "Deleted"  },
+  };
+  const { cls, label } = statusMap[currentStatus] ?? { cls: "bg-light text-dark", label: currentStatus };
+  const STATUS_OPTIONS = ["active", "inactive", "pending"];
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const handleSelect = async (newStatus) => {
+    if (newStatus === currentStatus) {
+      setOpen(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      await apiUpdateUserStatus(userId, newStatus);
+      toast.success(`Status changed to "${newStatus}"`);
+      onChanged(userId, newStatus);
+      setOpen(false);
+    } catch (err) {
+      showApiError(err, (m) => toast.error(m));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="position-relative d-inline-block" ref={dropdownRef}>
+      <span
+        className={`badge ${cls} py-2 px-3`}
+        style={{ cursor: "pointer", userSelect: "none" }}
+        onClick={() => setOpen(prev => !prev)}
+      >
+        {loading ? (
+          <span className="spinner-border spinner-border-sm me-1" role="status" />
+        ) : (
+          <i className={`bi ${open ? "bi-caret-up-fill" : "bi-caret-down-fill"} me-1`} />
+        )}
+        {label}
+      </span>
+
+      {open && (
+        <div
+          className="position-absolute mt-1 bg-white border rounded shadow-sm"
+          style={{ zIndex: 1000, minWidth: "130px" }}
+        >
+          {STATUS_OPTIONS.map(option => {
+            const optMap = statusMap[option] || { label: option };
+            return (
+              <div
+                key={option}
+                className={`px-3 py-2 ${option === currentStatus ? "bg-light fw-semibold" : ""}`}
+                style={{ cursor: "pointer", whiteSpace: "nowrap" }}
+                onClick={() => handleSelect(option)}
+              >
+                <span className="me-2">•</span>
+                {optMap.label}
+                {option === currentStatus && (
+                  <i className="bi bi-check-lg ms-2 text-success" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const fmtDate = (iso) =>
@@ -248,11 +337,12 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
 
 // ─── Edit Admin Modal ─────────────────────────────────────────────────────────
 
-const EditAdminModal = ({ admin: editTarget, onClose, onSaved }) => {
+const EditAdminModal = ({ admin: editTarget, availableRoles, onClose, onSaved }) => {
   const [form, setForm] = useState({
     userName: editTarget.userName || "",
     email:    editTarget.email    || "",
     phone:    editTarget.phone    || "",
+    roleId:   editTarget.roleId   || "",
     password: "",
   });
   const [errors, setErrors]   = useState({});
@@ -269,6 +359,7 @@ const EditAdminModal = ({ admin: editTarget, onClose, onSaved }) => {
     if (!form.userName.trim() || form.userName.length < 3) errs.userName = "Username must be at least 3 characters";
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Valid email is required";
     if (!/^[0-9]{10}$/.test(form.phone)) errs.phone = "Phone must be exactly 10 digits";
+    if (!form.roleId) errs.roleId = "Role is required";
     if (form.password && !PASSWORD_REGEX.test(form.password))
       errs.password = "Must be 8+ chars with 1 uppercase, 1 number, 1 special char (@$!%*?&)";
     return errs;
@@ -282,6 +373,7 @@ const EditAdminModal = ({ admin: editTarget, onClose, onSaved }) => {
     try {
       const payload = {
         userName: form.userName, email: form.email, phone: form.phone,
+        roleId: Number(form.roleId),
         ...(form.password ? { password: form.password } : {}),
       };
       const res = await apiEditAdmin(editTarget.id, payload);
@@ -320,6 +412,24 @@ const EditAdminModal = ({ admin: editTarget, onClose, onSaved }) => {
             <InputField label="Phone" id="ea_phone" name="phone" type="tel"
               placeholder="10-digit number" autoComplete="tel"
               value={form.phone} onChange={handleChange} error={errors.phone} />
+            <div className="mb-3">
+              <label htmlFor="ea_roleId" className="form-label fw-semibold">Access Role</label>
+              <select
+                id="ea_roleId"
+                name="roleId"
+                className={`form-select ${errors.roleId ? "is-invalid" : ""}`}
+                value={form.roleId}
+                onChange={handleChange}
+              >
+                <option value="">Select role</option>
+                {availableRoles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+              {errors.roleId && <div className="invalid-feedback">{errors.roleId}</div>}
+            </div>
 
             <div className="mb-3">
               <div className="d-flex align-items-center justify-content-between mb-1">
@@ -366,28 +476,73 @@ const EditAdminModal = ({ admin: editTarget, onClose, onSaved }) => {
 
 const StatusDropdown = ({ userId, currentStatus, onChanged }) => {
   const [loading, setLoading] = useState(false);
-  const handleChange = async (e) => {
-    const newStatus = e.target.value;
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const STATUS_OPTIONS = [
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+    { value: "pending", label: "Pending" },
+  ];
+
+  useEffect(() => {
+    if (!open) return;
+    const onOutsideClick = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onOutsideClick);
+    return () => document.removeEventListener("mousedown", onOutsideClick);
+  }, [open]);
+
+  const handleSelect = async (newStatus) => {
     if (newStatus === currentStatus) return;
     setLoading(true);
     try {
       await apiUpdateUserStatus(userId, newStatus);
       toast.success(`Status → "${newStatus}"`);
       onChanged(userId, newStatus);
+      setOpen(false);
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
     } finally {
       setLoading(false);
     }
   };
+
   return (
-    <select id={`user_status_${userId}`} name="userStatus" autoComplete="off"
-      className="form-select form-select-sm" style={{ minWidth: 110 }}
-      value={currentStatus} onChange={handleChange} disabled={loading}>
-      {["active", "inactive", "pending"].map((s) => (
-        <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-      ))}
-    </select>
+    <div className="position-relative" style={{ minWidth: 130 }} ref={dropdownRef}>
+      <button
+        type="button"
+        className="btn btn-sm btn-outline-secondary w-100 d-flex justify-content-between align-items-center"
+        onClick={() => setOpen((p) => !p)}
+        disabled={loading}
+      >
+        <span className="small text-capitalize">{currentStatus}</span>
+        <i className={`bi ${open ? "bi-chevron-up" : "bi-chevron-down"}`} />
+      </button>
+
+      {open && (
+        <div className="position-absolute mt-1 p-2 border rounded bg-white shadow-sm" style={{ zIndex: 10, minWidth: 180 }}>
+          <div className="small fw-semibold text-muted px-1 mb-2">Status</div>
+          {STATUS_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`btn btn-sm w-100 text-start d-flex align-items-center justify-content-between mb-1 ${option.value === currentStatus ? "btn-light fw-semibold" : "btn-white"}`}
+              onClick={() => handleSelect(option.value)}
+              disabled={loading}
+            >
+              <span className="d-flex align-items-center gap-2">
+                <i className={`bi ${option.value === currentStatus ? "bi-dot text-primary" : "bi-circle"} small`} />
+                <span className="small">{option.label}</span>
+              </span>
+              {option.value === currentStatus && <span className="text-danger small">*</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -485,6 +640,8 @@ const ModulesTab = () => {
   const [loading, setLoading] = useState(true);
   const [modal,   setModal]   = useState(null);
   const [search,  setSearch]  = useState("");
+  const [page,    setPage]    = useState(1);
+  const [pageSize,setPageSize]= useState(10);
 
   useEffect(() => {
     apiGetAllModules()
@@ -508,6 +665,11 @@ const ModulesTab = () => {
   };
 
   const filtered = modules.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()));
+  const totalPages = pageSize === "all" ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const visibleRows = pageSize === "all"
+    ? filtered
+    : filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <>
@@ -525,6 +687,25 @@ const ModulesTab = () => {
         <input id="mod_search" name="moduleSearch" autoComplete="off"
           className="form-control" placeholder="Search modules..."
           value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+      <div className="mb-3 d-flex align-items-center gap-2" style={{ maxWidth: 220 }}>
+        <label htmlFor="modules_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
+        <select
+          id="modules_page_size"
+          className="form-select form-select-sm"
+          value={String(pageSize)}
+          onChange={(e) => {
+            const next = e.target.value === "all" ? "all" : Number(e.target.value);
+            setPageSize(next);
+            setPage(1);
+          }}
+        >
+          {PAGE_SIZE_OPTIONS.map((size) => (
+            <option key={size} value={size}>
+              {size === "all" ? "All" : size}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="card border-0 shadow-sm">
@@ -547,9 +728,9 @@ const ModulesTab = () => {
                 <tr><td colSpan={6} className="text-center py-5 text-muted">
                   {search ? "No modules match." : "No modules yet. Add one."}
                 </td></tr>
-              ) : filtered.map((m, i) => (
+              ) : visibleRows.map((m, i) => (
                 <tr key={m.id}>
-                  <td className="text-muted small">{i + 1}</td>
+                  <td className="text-muted small">{pageSize === "all" ? i + 1 : (safePage - 1) * pageSize + i + 1}</td>
                   <td className="fw-semibold">{m.name}</td>
                   <td><StatusBadge status={m.status} /></td>
                   <td className="text-muted small">{fmtDate(m.createdAt)}</td>
@@ -571,6 +752,9 @@ const ModulesTab = () => {
         </div>
         <div className="card-footer text-muted small bg-white">{filtered.length} module{filtered.length !== 1 ? "s" : ""}</div>
       </div>
+      {totalPages > 1 && (
+        <Pagination pagination={{ page: safePage, totalPages }} onPageChange={setPage} />
+      )}
 
       {modal?.type === "add" && (
         <ModuleFormModal mode="add" initial={null} onClose={() => setModal(null)} onSaved={handleSaved} />
@@ -812,6 +996,8 @@ const RolesTab = () => {
   const [loading,    setLoading]    = useState(true);
   const [modal,      setModal]      = useState(null);
   const [search,     setSearch]     = useState("");
+  const [page,       setPage]       = useState(1);
+  const [pageSize,   setPageSize]   = useState(10);
 
   useEffect(() => {
     Promise.all([apiGetAllRoles(), apiGetAllModules()])
@@ -841,6 +1027,11 @@ const RolesTab = () => {
     r.name.toLowerCase().includes(search.toLowerCase()) ||
     (r.description ?? "").toLowerCase().includes(search.toLowerCase())
   );
+  const totalPages = pageSize === "all" ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const visibleRows = pageSize === "all"
+    ? filtered
+    : filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <>
@@ -858,6 +1049,25 @@ const RolesTab = () => {
         <input id="role_search" name="roleSearch" autoComplete="off"
           className="form-control" placeholder="Search roles..."
           value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+      <div className="mb-3 d-flex align-items-center gap-2" style={{ maxWidth: 220 }}>
+        <label htmlFor="roles_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
+        <select
+          id="roles_page_size"
+          className="form-select form-select-sm"
+          value={String(pageSize)}
+          onChange={(e) => {
+            const next = e.target.value === "all" ? "all" : Number(e.target.value);
+            setPageSize(next);
+            setPage(1);
+          }}
+        >
+          {PAGE_SIZE_OPTIONS.map((size) => (
+            <option key={size} value={size}>
+              {size === "all" ? "All" : size}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="card border-0 shadow-sm">
@@ -881,9 +1091,9 @@ const RolesTab = () => {
                 <tr><td colSpan={7} className="text-center py-5 text-muted">
                   {search ? "No roles match." : "No roles yet. Add one."}
                 </td></tr>
-              ) : filtered.map((r, i) => (
+              ) : visibleRows.map((r, i) => (
                 <tr key={r.id}>
-                  <td className="text-muted small">{i + 1}</td>
+                  <td className="text-muted small">{pageSize === "all" ? i + 1 : (safePage - 1) * pageSize + i + 1}</td>
                   <td className="fw-semibold">{r.name}</td>
                   <td className="text-muted small">{r.description || <span className="fst-italic">—</span>}</td>
                   <td><StatusBadge status={r.status} /></td>
@@ -910,6 +1120,9 @@ const RolesTab = () => {
         </div>
         <div className="card-footer text-muted small bg-white">{filtered.length} role{filtered.length !== 1 ? "s" : ""}</div>
       </div>
+      {totalPages > 1 && (
+        <Pagination pagination={{ page: safePage, totalPages }} onPageChange={setPage} />
+      )}
 
       {modal?.type === "add" && (
         <RoleFormModal mode="add" roleId={null} allModules={allModules}
@@ -926,6 +1139,175 @@ const RolesTab = () => {
   );
 };
 
+// ─── Admin Own Profile Tab ────────────────────────────────────────────────────
+
+const AdminProfileTab = () => {
+  const { user, updateUser } = useAuth();
+  const [form, setForm] = useState({
+    userName: user?.userName ?? "",
+    email:    user?.email    ?? "",
+    phone:    user?.phone    ?? "",
+  });
+  const [errors,   setErrors]   = useState({});
+  const [loading,  setLoading]  = useState(false);
+
+  const handleChange = (e) => {
+    setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+    setErrors((p) => ({ ...p, [e.target.name]: "" }));
+  };
+
+  const validate = () => {
+    const errs = {};
+    if (!form.userName.trim() || form.userName.length < 3) errs.userName = "Username must be at least 3 characters";
+    if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Valid email is required";
+    if (!/^[0-9]{10}$/.test(form.phone)) errs.phone = "Phone must be exactly 10 digits";
+    return errs;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    const fd = new FormData();
+    fd.append("userName", form.userName);
+    fd.append("email",    form.email);
+    fd.append("phone",    form.phone);
+
+    setLoading(true);
+    try {
+      const res = await apiEditAdminProfile(fd);
+      updateUser({
+        userName: res.admin.userName,
+        email:    res.admin.email,
+        phone:    res.admin.phone,
+      });
+      setForm({
+        userName: res.admin.userName,
+        email:    res.admin.email,
+        phone:    res.admin.phone,
+      });
+      toast.success("Profile updated!");
+    } catch (err) {
+      const msg = err.message || "";
+      if (msg.toLowerCase().includes("email"))         setErrors((p) => ({ ...p, email: msg }));
+      else if (msg.toLowerCase().includes("username")) setErrors((p) => ({ ...p, userName: msg }));
+      else showApiError(err, (m) => toast.error(m));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <h5 className="fw-bold mb-4">Edit Profile</h5>
+      <div className="row justify-content-center">
+        <div className="col-md-8 col-lg-6">
+          <div className="card border-0 shadow-sm rounded-3">
+            <div className="card-body p-4">
+              <form onSubmit={handleSubmit} noValidate>
+                <InputField label="Username" id="ap_userName" name="userName" type="text"
+                  autoComplete="username"
+                  value={form.userName} onChange={handleChange} error={errors.userName} />
+                <InputField label="Email" id="ap_email" name="email" type="email"
+                  autoComplete="email"
+                  value={form.email} onChange={handleChange} error={errors.email} />
+                <InputField label="Phone" id="ap_phone" name="phone" type="tel"
+                  placeholder="10-digit number" autoComplete="tel"
+                  value={form.phone} onChange={handleChange} error={errors.phone} />
+
+                <button type="submit" disabled={loading} className="btn btn-warning w-100 py-2 fw-semibold mt-2">
+                  {loading ? <><span className="spinner-border spinner-border-sm me-2" />Saving...</> : "Save Changes"}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// ─── Admin Change Password Tab ─────────────────────────────────────────────────
+
+const AdminChangePasswordTab = () => {
+  const { logout } = useAuth();
+  const navigate   = useNavigate();
+  const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmNewPassword: "" });
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+    setErrors((p) => ({ ...p, [e.target.name]: "" }));
+  };
+
+  const validate = () => {
+    const errs = {};
+    if (!form.currentPassword) errs.currentPassword = "Current password is required";
+    if (!PASSWORD_REGEX.test(form.newPassword))
+      errs.newPassword = "Must be 8+ chars with 1 uppercase, 1 number, 1 special char";
+    if (form.newPassword !== form.confirmNewPassword)
+      errs.confirmNewPassword = "Passwords do not match";
+    return errs;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    setLoading(true);
+    try {
+      await apiChangeAdminPassword({
+        currentPassword: form.currentPassword,
+        newPassword:     form.newPassword,
+      });
+      toast.success("Password changed! Please login again.");
+      logout();
+      navigate("/admin/login");
+    } catch (err) {
+      const msg = err.message || "";
+      if (msg.toLowerCase().includes("current") || msg.toLowerCase().includes("incorrect"))
+        setErrors((p) => ({ ...p, currentPassword: msg }));
+      else showApiError(err, (m) => toast.error(m));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <h5 className="fw-bold mb-4">Change Password</h5>
+      <div className="row justify-content-center">
+        <div className="col-md-8 col-lg-6">
+          <div className="card border-0 shadow-sm rounded-3">
+            <div className="card-body p-4">
+              <form onSubmit={handleSubmit} noValidate>
+                <InputField label="Current Password" id="cp_current" name="currentPassword"
+                  type="password" autoComplete="current-password"
+                  placeholder="Your current password"
+                  value={form.currentPassword} onChange={handleChange} error={errors.currentPassword} />
+                <InputField label="New Password" id="cp_new" name="newPassword"
+                  type="password" autoComplete="new-password"
+                  placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
+                  value={form.newPassword} onChange={handleChange} error={errors.newPassword} />
+                <InputField label="Confirm New Password" id="cp_confirm" name="confirmNewPassword"
+                  type="password" autoComplete="new-password"
+                  placeholder="Repeat new password"
+                  value={form.confirmNewPassword} onChange={handleChange} error={errors.confirmNewPassword} />
+                <button type="submit" disabled={loading} className="btn btn-danger w-100 py-2 fw-semibold mt-2">
+                  {loading ? <><span className="spinner-border spinner-border-sm me-2" />Changing...</> : "Change Password"}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
 // ─── Main AdminDashboard ──────────────────────────────────────────────────────
 
 const AdminDashboard = () => {
@@ -935,18 +1317,60 @@ const AdminDashboard = () => {
   const {
     users, setUsers,
     pagination, fetchUsers,
-    admins, setAdmins, fetchAdmins,
-    dashboardCounts, setDashboardCounts,
+    admins, setAdmins,
+    dashboardCounts,
     fetchDashboard,
   } = useAdminData();
+  const permissionMap = useMemo(() => user?.permissions ?? {}, [user]);
+  const [livePermissions, setLivePermissions] = useState(permissionMap);
+  const isMasterAdmin = user?.role === "MASTER_ADMIN";
+  useEffect(() => {
+    setLivePermissions(permissionMap);
+  }, [permissionMap]);
+
+  useEffect(() => {
+    if (!user || isMasterAdmin) return;
+
+    const syncPermissions = async () => {
+      try {
+        const res = await apiGetAdminPermissions();
+        setLivePermissions(res.permissions || {});
+      } catch (err) {
+        if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m));
+      }
+    };
+
+    syncPermissions();
+    window.addEventListener("focus", syncPermissions);
+    return () => window.removeEventListener("focus", syncPermissions);
+  }, [user, isMasterAdmin]);
+
+  const canAccess = useCallback((moduleKey, action = "canView") => {
+    if (isMasterAdmin) return true;
+    if (normalizeModuleName(moduleKey) === "dashboard") return true;
+
+    const normalizedTarget = normalizeModuleName(moduleKey);
+    const hasMatch = Object.entries(livePermissions).some(([key, perms]) => {
+      const normalizedKey = normalizeModuleName(key);
+      const singularOrPluralMatch =
+        normalizedKey === normalizedTarget ||
+        `${normalizedKey}s` === normalizedTarget ||
+        normalizedKey === `${normalizedTarget}s`;
+      return singularOrPluralMatch && !!perms?.[action];
+    });
+
+    return hasMatch;
+  }, [isMasterAdmin, livePermissions]);
 
   const getActiveTab = () => {
-    if (pathname === "/admin/dashboard") return "dashboard";
-    if (pathname === "/admin/users")     return "users";
-    if (pathname === "/admin/admins")    return "admins";
-    if (pathname === "/admin/add-admin") return "addAdmin";
-    if (pathname === "/admin/modules")   return "modules";
-    if (pathname === "/admin/roles")     return "roles";
+    if (pathname === "/admin/dashboard")       return "dashboard";
+    if (pathname === "/admin/users")           return "users";
+    if (pathname === "/admin/admins")          return "admins";
+    if (pathname === "/admin/add-admin")       return "addAdmin";
+    if (pathname === "/admin/modules")         return "modules";
+    if (pathname === "/admin/roles")           return "roles";
+    if (pathname === "/admin/profile")         return "profile";
+    if (pathname === "/admin/change-password") return "changePassword";
     return "dashboard";
   };
   const activeTab = getActiveTab();
@@ -956,6 +1380,7 @@ const AdminDashboard = () => {
   const [adminForm,       setAdminForm]       = useState(INITIAL_ADMIN_FORM);
   const [adminFormErrors, setAdminFormErrors] = useState({});
   const [adminFormLoading,setAdminFormLoading]= useState(false);
+  const [availableRoles,  setAvailableRoles]  = useState([]);
   const [filterStatus,    setFilterStatus]    = useState("all");
   const [searchQuery,     setSearchQuery]     = useState("");
   const [adminSearch,     setAdminSearch]     = useState("");
@@ -974,13 +1399,23 @@ const AdminDashboard = () => {
       fetchDashboard();
     } else if (activeTab === "users") {
       setLoadingData(true);
-      fetchUsers(1, 10, filterStatus === "all" ? "" : filterStatus, searchQuery)
+      fetchUsers(1, pagination.limit, filterStatus === "all" ? "" : filterStatus, searchQuery)
         .finally(() => setLoadingData(false));
     } else if (activeTab === "admins") {
       setLoadingData(true);
-      fetchAdminsPaginated(1, 10, "").finally(() => setLoadingData(false));
+      fetchAdminsPaginated(1, adminPagination.limit, "").finally(() => setLoadingData(false));
     }
   }, [activeTab]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!isMasterAdmin) return;
+    apiGetAllRoles()
+      .then((res) => {
+        const roleOptions = (res.roles || []).filter((role) => role.status === "active" && !role.isDeleted);
+        setAvailableRoles(roleOptions);
+      })
+      .catch((err) => showApiError(err, toast.error));
+  }, [isMasterAdmin]);
 
   // ─── Users helpers ──────────────────────────────────────────────────────────
   const applyFilter = useCallback((status, search, page = 1) => {
@@ -1004,14 +1439,20 @@ const AdminDashboard = () => {
       .finally(() => setLoadingData(false));
   }, [pagination.limit, filterStatus, searchQuery]); // eslint-disable-line
 
+  const handleUserLimitChange = useCallback((nextLimit) => {
+    setLoadingData(true);
+    fetchUsers(1, nextLimit, filterStatus === "all" ? "" : filterStatus, searchQuery)
+      .finally(() => setLoadingData(false));
+  }, [filterStatus, searchQuery]); // eslint-disable-line
+
   const handleStatusChanged = useCallback((userId, newStatus) => {
     setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, status: newStatus } : u));
     fetchDashboard();
-  }, []); // eslint-disable-line
+  }, [setUsers, fetchDashboard]);
 
   const handleEditSaved = useCallback((updatedUser) => {
     setUsers((prev) => prev.map((u) => u.id === updatedUser.id ? { ...u, ...updatedUser } : u));
-  }, []);
+  }, [setUsers]);
 
   const handleDeleteUser = useCallback((userId, userName) => {
     setConfirmModal({
@@ -1027,21 +1468,7 @@ const AdminDashboard = () => {
         } catch (err) { showApiError(err, (m) => toast.error(m)); }
       },
     });
-  }, []); // eslint-disable-line
-
-  const handleLogoutUser = useCallback((userId, userName) => {
-    setConfirmModal({
-      show: true, title: "Logout User", danger: false,
-      message: `Force logout "${userName}"? All their active sessions will end.`,
-      onConfirm: async () => {
-        closeConfirm();
-        try {
-          await apiLogoutUserByAdmin(userId);
-          toast.success(`${userName} logged out`);
-        } catch (err) { showApiError(err, (m) => toast.error(m)); }
-      },
-    });
-  }, []); // eslint-disable-line
+  }, [setUsers, fetchDashboard]);
 
   // ─── Add Admin form ─────────────────────────────────────────────────────────
   const handleAdminFormChange = (e) => {
@@ -1057,7 +1484,7 @@ const AdminDashboard = () => {
     setAdminFormLoading(true);
     const toastId = toast.loading("Adding admin...");
     try {
-      await apiAddAdmin(adminForm);
+      await apiAddAdmin({ ...adminForm, roleId: Number(adminForm.roleId) });
       toast.update(toastId, { render: "Admin added!", type: "success", isLoading: false, autoClose: 3000 });
       setAdminForm(INITIAL_ADMIN_FORM);
       setAdminFormErrors({});
@@ -1083,7 +1510,7 @@ const AdminDashboard = () => {
     } catch (err) {
       if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m));
     }
-  }, []); // eslint-disable-line
+  }, [setAdmins]);
 
   const handleAdminSearchChange = (e) => {
     const val = e.target.value;
@@ -1100,14 +1527,14 @@ const AdminDashboard = () => {
     fetchAdminsPaginated(page, adminPagination.limit, adminSearch).finally(() => setLoadingData(false));
   }, [adminPagination.limit, adminSearch]); // eslint-disable-line
 
-  const handleAdminStatusChanged = useCallback((adminId, newStatus) => {
-    setAdmins((prev) => prev.map((a) => a.id === adminId ? { ...a, status: newStatus } : a));
-    fetchDashboard();
-  }, []); // eslint-disable-line
+  const handleAdminLimitChange = useCallback((nextLimit) => {
+    setLoadingData(true);
+    fetchAdminsPaginated(1, nextLimit, adminSearch).finally(() => setLoadingData(false));
+  }, [adminSearch]); // eslint-disable-line
 
   const handleEditAdminSaved = useCallback((updatedAdmin) => {
     setAdmins((prev) => prev.map((a) => a.id === updatedAdmin.id ? { ...a, ...updatedAdmin } : a));
-  }, []);
+  }, [setAdmins]);
 
   const handleDeleteAdmin = useCallback((adminId, adminName) => {
     setConfirmModal({
@@ -1125,28 +1552,14 @@ const AdminDashboard = () => {
     });
   }, []); // eslint-disable-line
 
-  const handleLogoutAdmin = useCallback((adminId, adminName) => {
-    setConfirmModal({
-      show: true, title: "Force Logout Admin", danger: false,
-      message: `Force logout "${adminName}"? All their active sessions will end.`,
-      onConfirm: async () => {
-        closeConfirm();
-        try {
-          await apiLogoutAdminByMaster(adminId);
-          toast.success(`${adminName} logged out`);
-        } catch (err) { showApiError(err, (m) => toast.error(m)); }
-      },
-    });
-  }, []); // eslint-disable-line
-
   // ─── Sidebar ────────────────────────────────────────────────────────────────
   const NAV_ITEMS = [
-    { label: "Dashboard",  path: "/admin/dashboard", tab: "dashboard", icon: "bi-speedometer2",  roles: ["ADMIN", "MASTER_ADMIN"] },
-    { label: "All Users",  path: "/admin/users",     tab: "users",     icon: "bi-people",        roles: ["ADMIN", "MASTER_ADMIN"] },
-    { label: "All Admins", path: "/admin/admins",    tab: "admins",    icon: "bi-shield-lock",   roles: ["MASTER_ADMIN"] },
-    { label: "Add Admin",  path: "/admin/add-admin", tab: "addAdmin",  icon: "bi-person-plus",   roles: ["MASTER_ADMIN"] },
-    { label: "Modules",    path: "/admin/modules",   tab: "modules",   icon: "bi-grid",          roles: ["MASTER_ADMIN"] },
-    { label: "Roles",      path: "/admin/roles",     tab: "roles",     icon: "bi-person-badge",  roles: ["MASTER_ADMIN"] },
+    { label: "Dashboard",  path: "/admin/dashboard", tab: "dashboard", icon: "bi-speedometer2", moduleKey: "dashboard", action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
+    { label: "All Users",  path: "/admin/users",     tab: "users",     icon: "bi-people", moduleKey: "users", action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
+    { label: "All Admins", path: "/admin/admins",    tab: "admins",    icon: "bi-shield-lock", moduleKey: "admins", action: "canView", roles: ["MASTER_ADMIN"] },
+    { label: "Add Admin",  path: "/admin/add-admin", tab: "addAdmin",  icon: "bi-person-plus", moduleKey: "admins", action: "canAdd", roles: ["MASTER_ADMIN"] },
+    { label: "Modules",    path: "/admin/modules",   tab: "modules",   icon: "bi-grid", moduleKey: "modules", action: "canView", roles: ["MASTER_ADMIN"] },
+    { label: "Roles",      path: "/admin/roles",     tab: "roles",     icon: "bi-person-badge", moduleKey: "roles", action: "canView", roles: ["MASTER_ADMIN"] },
   ];
 
   const Sidebar = () => (
@@ -1158,7 +1571,7 @@ const AdminDashboard = () => {
       </button>
       <nav className="flex-grow-1 py-2">
         {NAV_ITEMS
-          .filter(({ roles }) => roles.includes(user?.role))
+          .filter(({ roles, moduleKey, action }) => roles.includes(user?.role) && canAccess(moduleKey, action))
           .map(({ label, path, tab, icon }) => (
             <button key={tab} onClick={() => navigate(path)}
               className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
@@ -1178,6 +1591,7 @@ const AdminDashboard = () => {
 
       // ── Dashboard ──────────────────────────────────────────────────────────
       case "dashboard":
+        if (!canAccess("dashboard", "canView")) { navigate("/unauthorized"); return null; }
         return (
           <>
             <h5 className="fw-bold mb-4">Dashboard</h5>
@@ -1213,11 +1627,23 @@ const AdminDashboard = () => {
 
       // ── Users ──────────────────────────────────────────────────────────────
       case "users":
+        if (!canAccess("users", "canView")) { navigate("/unauthorized"); return null; }
         return (
           <>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <h5 className="fw-bold mb-0">All Users</h5>
-              <span className="badge bg-primary">{pagination.total} total</span>
+              <div className="d-flex align-items-center gap-2">
+                <span className="badge bg-primary">{pagination.total} total</span>
+                {canAccess("users", "canAdd") && (
+                  <button
+                    className="btn btn-warning btn-sm fw-semibold"
+                    onClick={() => navigate("/register")}
+                  >
+                    <i className="bi bi-person-plus me-1" />
+                    Add User
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="card border-0 shadow-sm rounded-3 mb-3">
@@ -1232,6 +1658,22 @@ const AdminDashboard = () => {
                     <option value="inactive">Inactive</option>
                     <option value="pending">Pending</option>
                     <option value="deleted">Deleted</option>
+                  </select>
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  <label htmlFor="users_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
+                  <select
+                    id="users_page_size"
+                    className="form-select form-select-sm"
+                    style={{ minWidth: 100 }}
+                    value={String(pagination.limit)}
+                    onChange={(e) => handleUserLimitChange(e.target.value === "all" ? "all" : Number(e.target.value))}
+                  >
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={size} value={size}>
+                        {size === "all" ? "All" : size}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="ms-auto d-flex align-items-center gap-2" style={{ minWidth: 220 }}>
@@ -1264,7 +1706,7 @@ const AdminDashboard = () => {
                           <tr>
                             {[
                               "#", "Name", "Phone", "Email", "Status",
-                              ...(user?.role === "MASTER_ADMIN" ? ["Actions"] : []),
+                              ...(canAccess("users", "canEdit") || canAccess("users", "canDelete") ? ["Actions"] : []),
                             ].map((c) => (
                               <th key={c} className="text-uppercase small">{c}</th>
                             ))}
@@ -1272,7 +1714,7 @@ const AdminDashboard = () => {
                         </thead>
                         <tbody>
                           {users.length === 0 ? (
-                            <tr><td colSpan={user?.role === "MASTER_ADMIN" ? 6 : 5} className="text-center text-muted py-5">
+                            <tr><td colSpan={canAccess("users", "canEdit") || canAccess("users", "canDelete") ? 6 : 5} className="text-center text-muted py-5">
                               <i className="bi bi-inbox fs-3 d-block mb-2" />No users found
                             </td></tr>
                           ) : users.map((u, i) => (
@@ -1285,34 +1727,33 @@ const AdminDashboard = () => {
                               <td className="small">{u.phone}</td>
                               <td className="small">{u.email}</td>
                               <td>
-                                {user?.role === "MASTER_ADMIN" ? (
-                                  <div className="d-flex align-items-center gap-2">
-                                    <StatusBadge status={u.status} />
-                                    {u.status !== "deleted" && (
-                                      <StatusDropdown userId={u.id} currentStatus={u.status} onChanged={handleStatusChanged} />
-                                    )}
-                                  </div>
+                                {canAccess("users", "canEdit") && u.status !== "deleted" ? (
+                                  <StatusBadgeDropdown
+                                    userId={u.id}
+                                    currentStatus={u.status}
+                                    onChanged={handleStatusChanged}
+                                  />
                                 ) : (
                                   <StatusBadge status={u.status} />
                                 )}
                               </td>
-                              {user?.role === "MASTER_ADMIN" && (
+                              {(canAccess("users", "canEdit") || canAccess("users", "canDelete")) && (
                                 <td>
                                   <div className="d-flex gap-1 justify-content-center">
-                                    <button className="btn btn-sm btn-outline-primary" title="Edit user"
-                                      onClick={() => setEditTarget(u)}>
-                                      <i className="bi bi-pencil" />
-                                    </button>
+                                    {canAccess("users", "canEdit") && (
+                                      <button className="btn btn-sm btn-outline-primary" title="Edit user"
+                                        onClick={() => setEditTarget(u)}>
+                                        <i className="bi bi-pencil" />
+                                      </button>
+                                    )}
                                     {u.status !== "deleted" && (
                                       <>
-                                        <button className="btn btn-sm btn-outline-danger" title="Delete user"
-                                          onClick={() => handleDeleteUser(u.id, u.userName)}>
-                                          <i className="bi bi-trash" />
-                                        </button>
-                                        <button className="btn btn-sm btn-outline-warning" title="Force logout"
-                                          onClick={() => handleLogoutUser(u.id, u.userName)}>
-                                          <i className="bi bi-box-arrow-right" />
-                                        </button>
+                                        {canAccess("users", "canDelete") && (
+                                          <button className="btn btn-sm btn-outline-danger" title="Delete user"
+                                            onClick={() => handleDeleteUser(u.id, u.userName)}>
+                                            <i className="bi bi-trash" />
+                                          </button>
+                                        )}
                                       </>
                                     )}
                                   </div>
@@ -1350,22 +1791,40 @@ const AdminDashboard = () => {
             {/* Search bar */}
             <div className="card border-0 shadow-sm rounded-3 mb-3">
               <div className="card-body py-2 px-3">
-                <div className="input-group input-group-sm" style={{ maxWidth: 320 }}>
-                  <span className="input-group-text bg-white"><i className="bi bi-search text-muted" /></span>
-                  <input id="admin_search" name="adminSearch" type="text" autoComplete="off"
-                    className="form-control border-start-0"
-                    placeholder="Search username, email, phone..."
-                    value={adminSearch} onChange={handleAdminSearchChange} />
-                  {adminSearch && (
-                    <button className="btn btn-outline-secondary btn-sm"
-                      onClick={() => {
-                        setAdminSearch("");
-                        setLoadingData(true);
-                        fetchAdminsPaginated(1, adminPagination.limit, "").finally(() => setLoadingData(false));
-                      }}>
-                      <i className="bi bi-x" />
-                    </button>
-                  )}
+                <div className="d-flex flex-wrap gap-2 align-items-center">
+                  <div className="d-flex align-items-center gap-2">
+                    <label htmlFor="admins_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
+                    <select
+                      id="admins_page_size"
+                      className="form-select form-select-sm"
+                      style={{ minWidth: 100 }}
+                      value={String(adminPagination.limit)}
+                      onChange={(e) => handleAdminLimitChange(e.target.value === "all" ? "all" : Number(e.target.value))}
+                    >
+                      {PAGE_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size === "all" ? "All" : size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="input-group input-group-sm ms-auto" style={{ maxWidth: 320 }}>
+                    <span className="input-group-text bg-white"><i className="bi bi-search text-muted" /></span>
+                    <input id="admin_search" name="adminSearch" type="text" autoComplete="off"
+                      className="form-control border-start-0"
+                      placeholder="Search username, email, phone..."
+                      value={adminSearch} onChange={handleAdminSearchChange} />
+                    {adminSearch && (
+                      <button className="btn btn-outline-secondary btn-sm"
+                        onClick={() => {
+                          setAdminSearch("");
+                          setLoadingData(true);
+                          fetchAdminsPaginated(1, adminPagination.limit, "").finally(() => setLoadingData(false));
+                        }}>
+                        <i className="bi bi-x" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1380,14 +1839,14 @@ const AdminDashboard = () => {
                       <table className="table table-bordered table-hover align-middle mb-0">
                         <thead className="table-dark">
                           <tr>
-                            {["#", "Username", "Email", "Phone", "Created", "Actions"].map((c) => (
+                            {["#", "Username", "Access Role", "Email", "Phone", "Created", "Actions"].map((c) => (
                               <th key={c} className="text-uppercase small">{c}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {admins.length === 0 ? (
-                            <tr><td colSpan={6} className="text-center text-muted py-5">
+                            <tr><td colSpan={7} className="text-center text-muted py-5">
                               <i className="bi bi-inbox fs-3 d-block mb-2" />
                               {adminSearch ? "No admins match your search" : "No admins found"}
                             </td></tr>
@@ -1398,6 +1857,7 @@ const AdminDashboard = () => {
                                 <div className="fw-semibold small">{a.userName}</div>
                                 <div className="text-muted" style={{ fontSize: 11 }}>{a.role}</div>
                               </td>
+                              <td className="small">{a.roleName || "—"}</td>
                               <td className="small">{a.email}</td>
                               <td className="small">{a.phone}</td>
                               <td className="text-muted small">{fmtDate(a.createdAt)}</td>
@@ -1449,6 +1909,24 @@ const AdminDashboard = () => {
                     <InputField label="Phone" id="aa_phone" name="phone" type="tel"
                       autoComplete="tel" placeholder="10-digit number"
                       value={adminForm.phone} onChange={handleAdminFormChange} error={adminFormErrors.phone} />
+                    <div className="mb-3">
+                      <label htmlFor="aa_roleId" className="form-label fw-semibold">Access Role</label>
+                      <select
+                        id="aa_roleId"
+                        name="roleId"
+                        className={`form-select ${adminFormErrors.roleId ? "is-invalid" : ""}`}
+                        value={adminForm.roleId}
+                        onChange={handleAdminFormChange}
+                      >
+                        <option value="">Select role</option>
+                        {availableRoles.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                      {adminFormErrors.roleId && <div className="invalid-feedback">{adminFormErrors.roleId}</div>}
+                    </div>
                     <InputField label="Password" id="aa_password" name="password" type="password"
                       autoComplete="new-password" placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
                       value={adminForm.password} onChange={handleAdminFormChange} error={adminFormErrors.password} />
@@ -1476,6 +1954,12 @@ const AdminDashboard = () => {
         if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
         return <RolesTab />;
 
+      case "profile":
+        return <AdminProfileTab />;
+
+      case "changePassword":
+        return <AdminChangePasswordTab />;
+
       default: return null;
     }
   };
@@ -1493,6 +1977,7 @@ const AdminDashboard = () => {
       {editAdminTarget && (
         <EditAdminModal
           admin={editAdminTarget}
+          availableRoles={availableRoles}
           onClose={() => setEditAdminTarget(null)}
           onSaved={handleEditAdminSaved}
         />

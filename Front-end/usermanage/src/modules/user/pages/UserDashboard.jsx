@@ -16,7 +16,7 @@ import "bootstrap-icons/font/bootstrap-icons.css";
 
 
 const UserDashboard = () => {
-  const { logout } = useAuth();
+  const { logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { profile, setProfile, guardedCall } = useUserProfile();
@@ -83,6 +83,7 @@ const UserDashboard = () => {
         () => apiUpdateUserProfile(formData),
         (res) => {
           setProfile(res.data);
+          updateUser({ profilePicture: res.data.profilePicture, userName: res.data.userName });
           setPreview(null);
           setNewImage(null);
           toast.success("Profile updated successfully");

@@ -51,7 +51,7 @@ export const editModule = async (req, res) => {
     const { name, status } = req.body;
 
     const existing = await findModuleById(id);
-    if (!existing) return sendErrorResponse(res, "Module not found", 404);
+    if (!existing || existing.isDeleted) return sendErrorResponse(res, "Module not found", 404);
 
     // Duplicate name check (skip if same record)
     const duplicate = await findModuleByName(name);
@@ -71,7 +71,7 @@ export const removeModule = async (req, res) => {
     const { id } = req.params;
 
     const existing = await findModuleById(id);
-    if (!existing) return sendErrorResponse(res, "Module not found", 404);
+    if (!existing || existing.isDeleted) return sendErrorResponse(res, "Module not found", 404);
 
     await deleteModule(id);
     return sendSuccessResponse(res, "Module deleted successfully");

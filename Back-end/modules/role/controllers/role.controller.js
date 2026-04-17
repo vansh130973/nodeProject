@@ -9,6 +9,7 @@ import {
   upsertPermissions,
 } from "../models/role.model.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
+import { deleteTokensByRoleId } from "../../admin/models/admin.model.js";
 
 export const listRoles = async (req, res) => {
   try {
@@ -23,7 +24,7 @@ export const listRoles = async (req, res) => {
 export const getRole = async (req, res) => {
   try {
     const role = await findRoleById(req.params.id);
-    if (!role) return sendErrorResponse(res, "Role not found", 404);
+    if (!role || role.isDeleted) return sendErrorResponse(res, "Role not found", 404);
 
     const permissions = await getPermissionsByRoleId(role.id);
     return sendSuccessResponse(res, "Role fetched successfully", { role: { ...role, permissions } });
@@ -61,7 +62,7 @@ export const editRole = async (req, res) => {
     const { name, description, status, permissions } = req.body;
 
     const existing = await findRoleById(id);
-    if (!existing) return sendErrorResponse(res, "Role not found", 404);
+    if (!existing || existing.isDeleted) return sendErrorResponse(res, "Role not found", 404);
 
     const duplicate = await findRoleByName(name);
     if (duplicate && duplicate.id !== Number(id))
@@ -69,6 +70,8 @@ export const editRole = async (req, res) => {
 
     const updated = await updateRole(id, name, description, status);
     await upsertPermissions(id, permissions);
+    // Force-logout all admins assigned this role so they re-authenticate with new permissions
+    await deleteTokensByRoleId(id);
 
     const savedPermissions = await getPermissionsByRoleId(id);
     return sendSuccessResponse(res, "Role updated successfully", {
@@ -85,9 +88,9 @@ export const removeRole = async (req, res) => {
     const { id } = req.params;
 
     const existing = await findRoleById(id);
-    if (!existing) return sendErrorResponse(res, "Role not found", 404);
+    if (!existing || existing.isDeleted) return sendErrorResponse(res, "Role not found", 404);
 
-    await deleteRole(id); // CASCADE deletes rolePermissions rows too
+    await deleteRole(id);
     return sendSuccessResponse(res, "Role deleted successfully");
   } catch (err) {
     console.error("removeRole error:", err);

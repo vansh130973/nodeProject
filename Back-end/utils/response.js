@@ -1,8 +1,5 @@
-export const sendSuccessResponse = (res, message, data = {}, token, statusCode = 200) => {
+export const sendSuccessResponse = (res, message, data = {token}, statusCode = 200) => {
   const payload = { success: true, message };
-  if (token !== undefined && token !== null) {
-    payload.token = token;
-  }
 
   if ( data && typeof data === "object" && Object.keys(data).length > 0 ) {
     Object.assign(payload, data);

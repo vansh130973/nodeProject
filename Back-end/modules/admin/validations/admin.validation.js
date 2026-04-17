@@ -22,6 +22,10 @@ export const addAdminSchema = Joi.object({
     "string.empty":        "Password is required",
     "string.pattern.base": PASSWORD_MSG,
   }),
+  roleId: Joi.number().integer().positive().required().messages({
+    "number.base": "Role is required",
+    "any.required": "Role is required",
+  }),
   conformPassword: Joi.any().valid(Joi.ref("password")).required().messages({
     "any.required": "Confirm password is required",
     "any.only":     "Passwords do not match",
@@ -72,5 +76,9 @@ export const editAdminSchema = Joi.object({
   }),
   password: Joi.string().allow("", null).optional().when(Joi.string().min(1), {
     then: Joi.string().pattern(PASSWORD_PATTERN).messages({ "string.pattern.base": PASSWORD_MSG }),
+  }),
+  roleId: Joi.number().integer().positive().required().messages({
+    "number.base": "Role is required",
+    "any.required": "Role is required",
   }),
 });

@@ -87,6 +87,17 @@ const App = () => (
           </ProtectedRoute>
         } />
 
+                <Route path="/admin/profile" element={
+          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
+            <Layout><AdminDashboard /></Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/change-password" element={
+          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
+            <Layout><AdminDashboard /></Layout>
+          </ProtectedRoute>
+        } />
+
         <Route path="/unauthorized" element={<Layout><Unauthorized /></Layout>} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

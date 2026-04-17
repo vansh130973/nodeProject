@@ -25,6 +25,11 @@ export const apiGetDashboard = () =>
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
+export const apiGetAdminPermissions = () =>
+  fetch(`${BASE_URL}/admin/permissions`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 export const apiGetAllUsers = ({ page = 1, limit = 10, status = "", search = "" } = {}) => {
@@ -101,4 +106,25 @@ export const apiLogoutAdminByMaster = (id) =>
   fetch(`${BASE_URL}/admin/admins/${id}/logout`, {
     method: "POST",
     headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+// ─── Own Profile ──────────────────────────────────────────────────────────────
+
+export const apiGetAdminProfile = () =>
+  fetch(`${BASE_URL}/admin/profile`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+export const apiEditAdminProfile = (formData) =>
+  fetch(`${BASE_URL}/admin/profile`, {
+    method: "PUT",
+    headers: { Authorization: getAuthHeaders().Authorization },
+    body: formData,
+  }).then(handleResponse);
+
+export const apiChangeAdminPassword = (body) =>
+  fetch(`${BASE_URL}/admin/change-password`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(body),
   }).then(handleResponse);

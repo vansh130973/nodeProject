@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import { setSessionExpiredHandler } from "../utils/api";
 
 const TOKEN_KEY = "token";
 
@@ -61,8 +62,17 @@ export const AuthProvider = ({ children }) => {
     onSessionExpiredRef.current = fn;
   }, []);
 
+  useEffect(() => {
+    setSessionExpiredHandler(handleSessionExpired);
+  }, [handleSessionExpired]);
+
+  // Merge partial updates into user (e.g. after profile edit)
+  const updateUser = useCallback((fields) => {
+    setUser((prev) => prev ? { ...prev, ...fields } : prev);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, handleSessionExpired, setOnSessionExpired }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, handleSessionExpired, setOnSessionExpired, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

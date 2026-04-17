@@ -23,6 +23,8 @@ export const validateAddAdminForm = (form) => {
   else if (!PASSWORD_REGEX.test(form.password))
     errors.password = "Must be 8+ chars with 1 uppercase, 1 number, 1 special character";
 
+  if (!form.roleId) errors.roleId = "Role is required";
+
   if (!form.conformPassword) errors.conformPassword = "Confirm password is required";
   else if (form.password !== form.conformPassword) errors.conformPassword = "Passwords do not match";
 
