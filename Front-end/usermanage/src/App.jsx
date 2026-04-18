@@ -54,8 +54,20 @@ const App = () => (
         <Route path="/dashboard" element={<UserRoute><UserDashboard /></UserRoute>} />
         <Route path="/edit-profile" element={<UserRoute><UserDashboard /></UserRoute>} />
         <Route path="/change-password" element={<UserRoute><UserDashboard /></UserRoute>} />
+        <Route path="/tickets" element={<UserRoute><UserDashboard /></UserRoute>} />
+        <Route path="/tickets/:id" element={<UserRoute><UserDashboard /></UserRoute>} />
         <Route path="/admin/login" element={<Layout><AdminLoginPage /></Layout>} />
         <Route path="/admin/dashboard" element={
+          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
+            <Layout><AdminDashboard /></Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/tickets" element={
+          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
+            <Layout><AdminDashboard /></Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/tickets/:id" element={
           <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
             <Layout><AdminDashboard /></Layout>
           </ProtectedRoute>

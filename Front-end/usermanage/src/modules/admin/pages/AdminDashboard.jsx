@@ -33,6 +33,8 @@ import { validateAddAdminForm } from "../validations/admin.validation";
 import { showApiError } from "../../../utils/api";
 import useAdminData from "../hooks/useAdminData";
 import InputField from "../../../components/InputField";
+import AdminTicketsSection from "../../ticket/components/AdminTicketsSection";
+import AdminTicketDetailSection from "../../ticket/components/AdminTicketDetailSection";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 const INITIAL_ADMIN_FORM = { userName: "", email: "", phone: "", roleId: "", password: "", conformPassword: "" };
@@ -582,8 +584,14 @@ const ModuleFormModal = ({ mode, initial, onClose, onSaved }) => {
   const [status, setStatus] = useState(initial?.status ?? "active");
   const [busy,   setBusy]   = useState(false);
 
+  useEffect(() => {
+    setName(initial?.name ?? "");
+    setStatus(initial?.status ?? "active");
+  }, [mode, initial?.id]);
+
   const handleSubmit = async () => {
     if (!name.trim()) return toast.error("Module name is required");
+    if (mode === "edit" && initial?.id == null) return toast.error("Missing module id — refresh the page and try again.");
     setBusy(true);
     try {
       if (mode === "add") {
@@ -757,10 +765,16 @@ const ModulesTab = () => {
       )}
 
       {modal?.type === "add" && (
-        <ModuleFormModal mode="add" initial={null} onClose={() => setModal(null)} onSaved={handleSaved} />
+        <ModuleFormModal key="module-add" mode="add" initial={null} onClose={() => setModal(null)} onSaved={handleSaved} />
       )}
       {modal?.type === "edit" && (
-        <ModuleFormModal mode="edit" initial={modal.target} onClose={() => setModal(null)} onSaved={handleSaved} />
+        <ModuleFormModal
+          key={modal.target?.id}
+          mode="edit"
+          initial={modal.target}
+          onClose={() => setModal(null)}
+          onSaved={handleSaved}
+        />
       )}
     </>
   );
@@ -1336,7 +1350,7 @@ const AdminDashboard = () => {
         const res = await apiGetAdminPermissions();
         setLivePermissions(res.permissions || {});
       } catch (err) {
-        if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m));
+        showApiError(err, (m) => toast.error(m));
       }
     };
 
@@ -1371,6 +1385,8 @@ const AdminDashboard = () => {
     if (pathname === "/admin/roles")           return "roles";
     if (pathname === "/admin/profile")         return "profile";
     if (pathname === "/admin/change-password") return "changePassword";
+    if (pathname.startsWith("/admin/tickets/") && pathname !== "/admin/tickets") return "ticketDetail";
+    if (pathname === "/admin/tickets")          return "tickets";
     return "dashboard";
   };
   const activeTab = getActiveTab();
@@ -1508,7 +1524,7 @@ const AdminDashboard = () => {
       setAdmins(res.admins);
       setAdminPagination(res.pagination);
     } catch (err) {
-      if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m));
+      showApiError(err, (m) => toast.error(m));
     }
   }, [setAdmins]);
 
@@ -1556,6 +1572,7 @@ const AdminDashboard = () => {
   const NAV_ITEMS = [
     { label: "Dashboard",  path: "/admin/dashboard", tab: "dashboard", icon: "bi-speedometer2", moduleKey: "dashboard", action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
     { label: "All Users",  path: "/admin/users",     tab: "users",     icon: "bi-people", moduleKey: "users", action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
+    { label: "Tickets",    path: "/admin/tickets",   tab: "tickets",   icon: "bi-ticket-perforated", moduleKey: "tickets", action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
     { label: "All Admins", path: "/admin/admins",    tab: "admins",    icon: "bi-shield-lock", moduleKey: "admins", action: "canView", roles: ["MASTER_ADMIN"] },
     { label: "Add Admin",  path: "/admin/add-admin", tab: "addAdmin",  icon: "bi-person-plus", moduleKey: "admins", action: "canAdd", roles: ["MASTER_ADMIN"] },
     { label: "Modules",    path: "/admin/modules",   tab: "modules",   icon: "bi-grid", moduleKey: "modules", action: "canView", roles: ["MASTER_ADMIN"] },
@@ -1572,15 +1589,21 @@ const AdminDashboard = () => {
       <nav className="flex-grow-1 py-2">
         {NAV_ITEMS
           .filter(({ roles, moduleKey, action }) => roles.includes(user?.role) && canAccess(moduleKey, action))
-          .map(({ label, path, tab, icon }) => (
+          .map(({ label, path, tab, icon }) => {
+            const navActive =
+              tab === "tickets"
+                ? activeTab === "tickets" || activeTab === "ticketDetail"
+                : activeTab === tab;
+            return (
             <button key={tab} onClick={() => navigate(path)}
               className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-                ${activeTab === tab ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
+                ${navActive ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
               title={!sidebarOpen ? label : ""}>
               <i className={`bi ${icon} fs-5 flex-shrink-0`} />
               {sidebarOpen && <span className="small">{label}</span>}
             </button>
-          ))}
+            );
+          })}
       </nav>
     </div>
   );
@@ -1949,6 +1972,14 @@ const AdminDashboard = () => {
       case "modules":
         if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
         return <ModulesTab />;
+
+      case "tickets":
+        if (!canAccess("tickets", "canView")) { navigate("/unauthorized"); return null; }
+        return <AdminTicketsSection />;
+
+      case "ticketDetail":
+        if (!canAccess("tickets", "canView")) { navigate("/unauthorized"); return null; }
+        return <AdminTicketDetailSection />;
 
       case "roles":
         if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }

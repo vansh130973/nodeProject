@@ -43,3 +43,25 @@ export const moveToUserFolder = async (file, userId) => {
 
   return finalPath; // e.g. "uploads/14/user_1773827615695_91682.png"
 };
+
+/**
+ * Move upload into uploads/tickets/{ticketId}/[messages/] — returns relative path for DB.
+ */
+export const moveTicketAttachment = async (file, ticketId, subfolder = "") => {
+  if (!file) return null;
+
+  const ext =
+    path.extname(file.originalname).toLowerCase() ||
+    path.extname(file.filename);
+
+  const base = path.join("uploads", "tickets", String(ticketId));
+  const dir = subfolder ? path.join(base, subfolder) : base;
+
+  const uniqueName = `att_${Date.now()}_${Math.floor(Math.random() * 100000)}${ext}`;
+  const finalPath = path.join(dir, uniqueName);
+
+  await fs.mkdir(dir, { recursive: true });
+  await fs.rename(file.path, finalPath);
+
+  return finalPath.replace(/\\/g, "/");
+};

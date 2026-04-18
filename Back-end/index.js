@@ -23,9 +23,11 @@ app.get("/me", authenticate, (req, res) => {
 
 app.use("/uploads", express.static("uploads"));
 
-app.use("/",              userRoutes);
-app.use("/admin",         adminRoutes);
+app.use("/", userRoutes);
+// Register specific /admin/* sub-routers before the broad /admin router so paths like
+// /admin/modules/:id are never swallowed or mis-handled by the main admin router.
 app.use("/admin/modules", moduleRoutes);
-app.use("/admin/roles",   roleRoutes);
+app.use("/admin/roles", roleRoutes);
+app.use("/admin", adminRoutes);
 
 app.listen(3200, () => console.log("Server running on port 3200"));

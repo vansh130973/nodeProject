@@ -1,4 +1,4 @@
-export const sendSuccessResponse = (res, message, data = {token}, statusCode = 200) => {
+export const sendSuccessResponse = (res, message, data = {}, statusCode = 200) => {
   const payload = { success: true, message };
 
   if ( data && typeof data === "object" && Object.keys(data).length > 0 ) {

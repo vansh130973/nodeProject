@@ -28,7 +28,7 @@ const useAdminData = () => {
       const res = await apiGetDashboard();
       setDashboardCounts(res.data);
     } catch (err) {
-      if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m));
+      showApiError(err, (m) => toast.error(m));
     }
   };
 
@@ -38,7 +38,7 @@ const useAdminData = () => {
       setUsers(res.users);
       setPagination(res.pagination);
     } catch (err) {
-      if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m));
+      showApiError(err, (m) => toast.error(m));
     }
   };
 
@@ -48,7 +48,7 @@ const useAdminData = () => {
       const res = await apiGetAllAdmins();
       setAdmins(res.admins);
     } catch (err) {
-      if (!err.isSessionExpired) showApiError(err, (m) => toast.error(m));
+      showApiError(err, (m) => toast.error(m));
     }
   };
 

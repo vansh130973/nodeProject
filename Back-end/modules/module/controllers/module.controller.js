@@ -18,9 +18,17 @@ export const listModules = async (req, res) => {
   }
 };
 
+const parseModuleId = (raw) => {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
+
 export const getModule = async (req, res) => {
   try {
-    const module = await findModuleById(req.params.id);
+    const id = parseModuleId(req.params.id);
+    if (!id) return sendErrorResponse(res, "Invalid module id", 400);
+
+    const module = await findModuleById(id);
     if (!module) return sendErrorResponse(res, "Module not found", 404);
     return sendSuccessResponse(res, "Module fetched successfully", { module });
   } catch (err) {
@@ -47,15 +55,17 @@ export const createModule = async (req, res) => {
 
 export const editModule = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseModuleId(req.params.id);
+    if (!id) return sendErrorResponse(res, "Invalid module id", 400);
+
     const { name, status } = req.body;
 
     const existing = await findModuleById(id);
-    if (!existing || existing.isDeleted) return sendErrorResponse(res, "Module not found", 404);
+    if (!existing) return sendErrorResponse(res, "Module not found", 404);
 
-    // Duplicate name check (skip if same record)
+    // Duplicate name among non-deleted modules (same id allowed when restoring a soft-deleted row)
     const duplicate = await findModuleByName(name);
-    if (duplicate && duplicate.id !== Number(id))
+    if (duplicate && duplicate.id !== id)
       return sendErrorResponse(res, "Module name already exists", 409);
 
     const updated = await updateModule(id, name, status);
@@ -68,7 +78,8 @@ export const editModule = async (req, res) => {
 
 export const removeModule = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseModuleId(req.params.id);
+    if (!id) return sendErrorResponse(res, "Invalid module id", 400);
 
     const existing = await findModuleById(id);
     if (!existing || existing.isDeleted) return sendErrorResponse(res, "Module not found", 404);

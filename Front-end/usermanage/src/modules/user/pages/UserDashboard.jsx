@@ -11,6 +11,8 @@ import { validateEditProfileForm, validateChangePasswordForm } from "../validati
 import { showApiError } from "../../../utils/api";
 import useUserProfile from "../hooks/useUserProfile";
 import InputField from "../../../components/InputField";
+import UserTicketsSection from "../../ticket/components/UserTicketsSection";
+import UserTicketDetailSection from "../../ticket/components/UserTicketDetailSection";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 
@@ -25,6 +27,8 @@ const UserDashboard = () => {
     if (pathname === "/dashboard")       return "profile";
     if (pathname === "/edit-profile")    return "edit";
     if (pathname === "/change-password") return "password";
+    if (pathname.startsWith("/tickets/")) return "ticketDetail";
+    if (pathname === "/tickets")         return "tickets";
     return "profile";
   };
   const activeTab = getActiveTab();
@@ -131,10 +135,13 @@ const UserDashboard = () => {
           { label: "Profile",         path: "/dashboard",       tab: "profile",  icon: "bi-person-circle" },
           { label: "Edit Profile",    path: "/edit-profile",    tab: "edit",     icon: "bi-pencil-square" },
           { label: "Change Password", path: "/change-password", tab: "password", icon: "bi-shield-lock"   },
+          { label: "My Tickets",      path: "/tickets",          tab: "tickets",  icon: "bi-ticket-perforated" },
         ].map(({ label, path, tab, icon }) => (
           <button key={tab} onClick={() => navigate(path)}
             className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-              ${activeTab === tab ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}>
+              ${(tab === "tickets" ? (activeTab === "tickets" || activeTab === "ticketDetail") : activeTab === tab)
+                ? "bg-warning text-black fw-semibold"
+                : "bg-transparent text-white-50"}`}>
             <i className={`bi ${icon} fs-5 flex-shrink-0`} />
             <span className="small">{label}</span>
           </button>
@@ -256,6 +263,12 @@ const UserDashboard = () => {
             </div>
           </>
         );
+
+      case "tickets":
+        return <UserTicketsSection />;
+
+      case "ticketDetail":
+        return <UserTicketDetailSection />;
 
       case "password":
         return (

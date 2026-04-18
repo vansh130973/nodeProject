@@ -30,6 +30,16 @@ import {
   editUserSchema,
   editAdminSchema,
 } from "./validations/admin.validation.js";
+import {
+  listTicketsAdmin,
+  getTicketDetailAdmin,
+  addMessageAdmin,
+  patchTicketStatusAdmin,
+} from "../ticket/controllers/ticket.controller.js";
+import {
+  addMessageSchema,
+  updateTicketStatusSchema,
+} from "../ticket/validations/ticket.validation.js";
 
 const router = express.Router();
 
@@ -105,5 +115,38 @@ router.delete("/admins/:id",         authenticate, roleCheck("MASTER_ADMIN"), de
 router.get("/profile",          authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), getAdminProfile);
 router.put("/profile",          authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), upload.single("profilePicture"), editAdminProfile);
 router.put("/change-password",  authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), changeAdminOwnPassword);
+
+// ─── Support tickets (MASTER_ADMIN: all; ADMIN: requires Tickets module permission) ─
+router.get(
+  "/tickets",
+  authenticate,
+  roleCheck("MASTER_ADMIN", "ADMIN"),
+  modulePermissionCheck(["tickets", "ticket"], "canView"),
+  listTicketsAdmin
+);
+router.get(
+  "/tickets/:id",
+  authenticate,
+  roleCheck("MASTER_ADMIN", "ADMIN"),
+  modulePermissionCheck(["tickets", "ticket"], "canView"),
+  getTicketDetailAdmin
+);
+router.post(
+  "/tickets/:id/messages",
+  authenticate,
+  roleCheck("MASTER_ADMIN", "ADMIN"),
+  modulePermissionCheck(["tickets", "ticket"], "canEdit"),
+  upload.single("file"),
+  validate(addMessageSchema),
+  addMessageAdmin
+);
+router.patch(
+  "/tickets/:id/status",
+  authenticate,
+  roleCheck("MASTER_ADMIN", "ADMIN"),
+  modulePermissionCheck(["tickets", "ticket"], "canEdit"),
+  validate(updateTicketStatusSchema),
+  patchTicketStatusAdmin
+);
 
 export default router;

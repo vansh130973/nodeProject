@@ -2,7 +2,10 @@ import db from "../../../config/db.js";
 
 export const getAllModules = async () => {
   const [rows] = await db.query(
-    "SELECT id, name, status, isDeleted, createdAt, updatedAt FROM modules ORDER BY id DESC"
+    `SELECT id, name, status, isDeleted, createdAt, updatedAt
+     FROM modules
+     WHERE isDeleted = 0
+     ORDER BY id DESC`
   );
   return rows;
 };
@@ -40,7 +43,9 @@ export const insertModule = async (name, status = "active") => {
 
 export const updateModule = async (id, name, status) => {
   await db.query(
-    "UPDATE modules SET name = ?, status = ?, updatedAt = NOW() WHERE id = ? AND isDeleted = 0",
+    `UPDATE modules
+     SET name = ?, status = ?, isDeleted = 0, updatedAt = NOW()
+     WHERE id = ?`,
     [name, status, id]
   );
   return findModuleById(id);
