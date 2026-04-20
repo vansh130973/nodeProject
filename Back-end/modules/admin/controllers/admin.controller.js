@@ -17,6 +17,7 @@ import {
   getAdminPermissions,
   saveAdminToken,
   deleteAdminToken,
+  deleteAllAdminTokens,
   updateUserByAdmin,
   getUsersWithPaginationAndCount,
 } from "../models/admin.model.js";
@@ -334,6 +335,9 @@ export const editAdmin = async (req, res) => {
       password: hashedPassword,
       roleId,
     });
+
+    await deleteAllAdminTokens(id);
+
     return sendSuccessResponse(res, "Admin updated successfully", { admin: formatAdminData(updated) });
   } catch (error) {
     console.error("editAdmin error:", error);

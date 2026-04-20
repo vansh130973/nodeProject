@@ -12,8 +12,19 @@ export const getBearerHeader = () => ({
 });
 
 // ─── Central response handler ─────────────────────────────────────────────────
+let sessionExpiredShown = false;
 export const handleResponse = async (res) => {
   const data = await res.json();
+
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+
+    if (!sessionExpiredShown) {
+      sessionExpiredShown = true;
+      toast.error("Session expired. Please log in again.");
+    }
+    return;
+  }
 
   if (!res.ok || !data.success) {
     const message = data.message || "Something went wrong";
