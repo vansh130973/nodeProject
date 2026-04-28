@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
@@ -13,6 +13,7 @@ import useUserProfile from "../hooks/useUserProfile";
 import InputField from "../../../components/InputField";
 import UserTicketsSection from "../../ticket/components/UserTicketsSection";
 import UserTicketDetailSection from "../../ticket/components/UserTicketDetailSection";
+import { apiUserGetUnreadCount } from "../../ticket/services/ticket.service";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 
@@ -32,6 +33,32 @@ const UserDashboard = () => {
     return "profile";
   };
   const activeTab = getActiveTab();
+
+  const [unreadCount,    setUnreadCount]    = useState(0);
+  const [seenTicketIds,  setSeenTicketIds]  = useState(new Set());
+
+  // Fetch unread count immediately on mount so badge shows on any tab
+  useEffect(() => {
+    apiUserGetUnreadCount()
+      .then((count) => setUnreadCount(count))
+      .catch(() => {}); // silent — badge is non-critical
+  }, []);
+
+  const handleTicketsLoaded = (tickets) => {
+    const count = tickets.filter(
+      (t) => t.status === "adminReply" && !seenTicketIds.has(t.id)
+    ).length;
+    setUnreadCount(count);
+  };
+
+  const handleTicketViewed = (ticketId) => {
+    setSeenTicketIds((prev) => {
+      const next = new Set(prev);
+      next.add(ticketId);
+      return next;
+    });
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+  };
 
   const [editForm, setEditForm] = useState({ firstName: "", lastName: "", phone: "", gender: "" });
   const [editErrors, setEditErrors] = useState({});
@@ -133,19 +160,27 @@ const UserDashboard = () => {
       <nav className="flex-grow-1 py-2">
         {[
           { label: "Profile",         path: "/dashboard",       tab: "profile",  icon: "bi-person-circle" },
-          { label: "Edit Profile",    path: "/edit-profile",    tab: "edit",     icon: "bi-pencil-square" },
-          { label: "Change Password", path: "/change-password", tab: "password", icon: "bi-shield-lock"   },
-          { label: "My Tickets",      path: "/tickets",          tab: "tickets",  icon: "bi-ticket-perforated" },
-        ].map(({ label, path, tab, icon }) => (
-          <button key={tab} onClick={() => navigate(path)}
-            className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-              ${(tab === "tickets" ? (activeTab === "tickets" || activeTab === "ticketDetail") : activeTab === tab)
-                ? "bg-warning text-black fw-semibold"
-                : "bg-transparent text-white-50"}`}>
-            <i className={`bi ${icon} fs-5 flex-shrink-0`} />
-            <span className="small">{label}</span>
-          </button>
-        ))}
+          // { label: "Edit Profile",    path: "/edit-profile",    tab: "edit",     icon: "bi-pencil-square" },
+          // { label: "Change Password", path: "/change-password", tab: "password", icon: "bi-shield-lock"   },
+          { label: "My Tickets", path: "/tickets", tab: "tickets", icon: "bi-ticket-perforated" },
+        ].map(({ label, path, tab, icon }) => {
+          const isTicketTab = tab === "tickets" && (activeTab === "tickets" || activeTab === "ticketDetail");
+          const isActive = tab === "tickets" ? isTicketTab : activeTab === tab;
+          const showBadge = tab === "tickets" && unreadCount > 0;
+          return (
+            <button key={tab} onClick={() => navigate(path)}
+              className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
+                ${isActive ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}>
+              <i className={`bi ${icon} fs-5 flex-shrink-0`} />
+              <span className="small flex-grow-1">{label}</span>
+              {showBadge && (
+                <span className="badge rounded-pill bg-danger" style={{ fontSize: 11 }}>
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
@@ -265,10 +300,10 @@ const UserDashboard = () => {
         );
 
       case "tickets":
-        return <UserTicketsSection />;
+        return <UserTicketsSection onTicketsLoaded={handleTicketsLoaded} />;
 
       case "ticketDetail":
-        return <UserTicketDetailSection />;
+        return <UserTicketDetailSection onTicketViewed={handleTicketViewed} />;
 
       case "password":
         return (

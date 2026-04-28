@@ -127,7 +127,11 @@ export const addMessageUser = async (req, res) => {
     }
 
     await insertTicketMessage(ticketId, req.user.id, "user", text, filePath);
-    await touchTicket(ticketId);
+    if (ticket.status !== "closed") {
+      await updateTicketStatus(ticketId, "userReply");
+    } else {
+      await touchTicket(ticketId);
+    }
 
     const owner = await findUserById(req.user.id);
 
@@ -222,7 +226,11 @@ export const addMessageAdmin = async (req, res) => {
     }
 
     await insertTicketMessage(ticketId, req.user.id, "admin", text, filePath);
-    await touchTicket(ticketId);
+    if (ticket.status !== "closed") {
+      await updateTicketStatus(ticketId, "adminReply");
+    } else {
+      await touchTicket(ticketId);
+    }
 
     const adminRow = await findAdminById(req.user.id);
 

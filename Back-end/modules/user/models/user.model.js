@@ -4,7 +4,7 @@ import db from "../../../config/db.js";
 export const findActiveUserByEmailOrUsername = async (email, userName) => {
   try {
     const [result] = await db.query(
-      "SELECT * FROM users WHERE (email = ? OR userName = ?) AND status != 'deleted'",
+      "SELECT * FROM users WHERE (email = ? OR userName = ?) AND isDeleted != 1",
       [email, userName]
     );
     return result;
@@ -17,7 +17,7 @@ export const findActiveUserByEmailOrUsername = async (email, userName) => {
 export const findUserByUsername = async (userName) => {
   try {
     const [result] = await db.query(
-      "SELECT * FROM users WHERE userName = ? AND status != 'deleted'",
+      "SELECT * FROM users WHERE userName = ? AND isDeleted != 1",
       [userName]
     );
     return result[0] ?? null;
@@ -30,7 +30,7 @@ export const findUserByUsername = async (userName) => {
 export const findUserByEmail = async (email) => {
   try {
     const [result] = await db.query(
-      "SELECT * FROM users WHERE email = ? AND status != 'deleted'",
+      "SELECT * FROM users WHERE email = ? AND isDeleted != 1",
       [email]
     );
     return result[0] ?? null;

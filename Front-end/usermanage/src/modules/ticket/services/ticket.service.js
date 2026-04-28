@@ -79,3 +79,18 @@ export const apiAdminUpdateTicketStatus = async (id, status) => {
   });
   return handleResponse(res);
 };
+
+// Returns count of tickets where status=userReply (unread for admin)
+export const apiAdminGetUnreadCount = async () => {
+  const res = await fetch(`${BASE_URL}/admin/tickets?status=userReply&limit=1`, {
+    headers: getBearerHeader(),
+  });
+  const data = await handleResponse(res);
+  return data.pagination?.total ?? 0;
+};
+
+// Returns count of tickets where status=adminReply (unread for user)
+export const apiUserGetUnreadCount = async () => {
+  const data = await apiGetMyTickets();
+  return (data.tickets ?? []).filter((t) => t.status === "adminReply").length;
+};

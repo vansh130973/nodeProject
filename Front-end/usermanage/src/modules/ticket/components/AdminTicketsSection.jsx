@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { apiAdminListTickets } from "../services/ticket.service";
@@ -6,41 +6,47 @@ import { showApiError } from "../../../utils/api";
 
 const PAGE_OPTS = [5, 10, 25, 50];
 
-const statusBadge = (status) => {
-  const map = {
-    open: "bg-success",
-    pending: "bg-warning text-dark",
-    closed: "bg-secondary",
-  };
-  const cls = map[status] ?? "bg-light text-dark";
-  return <span className={`badge ${cls}`}>{status}</span>;
+const STATUS_META = {
+  open:       { cls: "bg-success",           label: "Open" },
+  pending:    { cls: "bg-warning text-dark",  label: "Pending" },
+  closed:     { cls: "bg-secondary",          label: "Closed" },
+  adminReply: { cls: "bg-info text-dark",     label: "Admin Replied" },
+  userReply:  { cls: "bg-danger",             label: "User Replied" },
 };
 
-const AdminTicketsSection = () => {
+const statusBadge = (status) => {
+  const m = STATUS_META[status] ?? { cls: "bg-light text-dark", label: status };
+  return <span className={`badge ${m.cls}`}>{m.label}</span>;
+};
+
+const AdminTicketsSection = ({ onUnreadChange }) => {
   const navigate = useNavigate();
-  const [tickets, setTickets] = useState([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 1,
-  });
+  const [tickets,      setTickets]      = useState([]);
+  const [pagination,   setPagination]   = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
   const [filterStatus, setFilterStatus] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [searchQuery,  setSearchQuery]  = useState("");
+  const [loading,      setLoading]      = useState(true);
   const searchDebounce = useRef(null);
 
-  const load = async (page = pagination.page, limitVal = pagination.limit, st = filterStatus, q = searchQuery) => {
+  const load = async (
+    page      = pagination.page,
+    limitVal  = pagination.limit,
+    st        = filterStatus,
+    q         = searchQuery,
+  ) => {
     setLoading(true);
     try {
-      const data = await apiAdminListTickets({
-        page,
-        limit: limitVal,
-        status: st,
-        search: q,
-      });
-      setTickets(data.tickets ?? []);
+      const data = await apiAdminListTickets({ page, limit: limitVal, status: st, search: q });
+      const list = data.tickets ?? [];
+      setTickets(list);
       if (data.pagination) setPagination(data.pagination);
+      // Report unread count to parent when loading all/userReply
+      if (st === "all" || st === "userReply") {
+        const unread = st === "userReply"
+          ? (data.pagination?.total ?? 0)
+          : list.filter((t) => t.status === "userReply").length;
+        onUnreadChange?.(unread);
+      }
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
     } finally {
@@ -67,17 +73,17 @@ const AdminTicketsSection = () => {
     load(1, pagination.limit, st, searchQuery);
   };
 
-  const handlePageChange = (page) => load(page, pagination.limit, filterStatus, searchQuery);
-
+  const handlePageChange  = (page)     => load(page, pagination.limit, filterStatus, searchQuery);
   const handleLimitChange = (limitVal) => load(1, limitVal, filterStatus, searchQuery);
 
   return (
     <>
       <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-        <h5 className="fw-bold mb-0">Support tickets</h5>
+        <h5 className="fw-bold mb-0">Tickets</h5>
         <span className="badge bg-primary">{pagination.total ?? 0} total</span>
       </div>
 
+      {/* ── Filters ── */}
       <div className="card border-0 shadow-sm rounded-3 mb-3">
         <div className="card-body py-2 px-3 d-flex flex-wrap gap-2 align-items-center">
           <label className="small text-muted mb-0">Status</label>
@@ -89,7 +95,8 @@ const AdminTicketsSection = () => {
           >
             <option value="all">All</option>
             <option value="open">Open</option>
-            <option value="pending">Pending</option>
+            <option value="adminReply">Admin Replied</option>
+            <option value="userReply">User Replied</option>
             <option value="closed">Closed</option>
           </select>
           <input
@@ -103,12 +110,11 @@ const AdminTicketsSection = () => {
         </div>
       </div>
 
+      {/* ── Table ── */}
       <div className="card border-0 shadow-sm rounded-3">
         <div className="card-body">
           {loading ? (
-            <div className="text-center py-5">
-              <div className="spinner-border text-warning" />
-            </div>
+            <div className="text-center py-5"><div className="spinner-border text-warning" /></div>
           ) : tickets.length === 0 ? (
             <p className="text-muted mb-0">No tickets match your filters.</p>
           ) : (
@@ -130,7 +136,14 @@ const AdminTicketsSection = () => {
                         style={{ cursor: "pointer" }}
                         onClick={() => navigate(`/admin/tickets/${t.id}`)}
                       >
-                        <td className="fw-semibold">{t.subject}</td>
+                        <td className="fw-semibold">
+                          {t.status === "userReply" && (
+                            <span className="badge bg-danger me-2" style={{ fontSize: 10 }}>
+                              New reply
+                            </span>
+                          )}
+                          {t.subject}
+                        </td>
                         <td className="small">
                           <div>{t.userName}</div>
                           <div className="text-muted">{t.email}</div>
@@ -145,6 +158,7 @@ const AdminTicketsSection = () => {
                 </table>
               </div>
 
+              {/* ── Pagination ── */}
               <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3 pt-3 border-top">
                 <div className="d-flex align-items-center gap-2">
                   <span className="small text-muted">Rows</span>
@@ -154,11 +168,7 @@ const AdminTicketsSection = () => {
                     value={pagination.limit}
                     onChange={(e) => handleLimitChange(Number(e.target.value))}
                   >
-                    {PAGE_OPTS.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
+                    {PAGE_OPTS.map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </div>
                 <div className="d-flex align-items-center gap-2">
@@ -168,7 +178,7 @@ const AdminTicketsSection = () => {
                     disabled={pagination.page <= 1}
                     onClick={() => handlePageChange(pagination.page - 1)}
                   >
-                    Prev
+                    <i className="bi bi-chevron-left" />
                   </button>
                   <span className="small text-muted">
                     Page {pagination.page} / {pagination.totalPages}
@@ -179,7 +189,7 @@ const AdminTicketsSection = () => {
                     disabled={pagination.page >= pagination.totalPages}
                     onClick={() => handlePageChange(pagination.page + 1)}
                   >
-                    Next
+                    <i className="bi bi-chevron-right" />
                   </button>
                 </div>
               </div>

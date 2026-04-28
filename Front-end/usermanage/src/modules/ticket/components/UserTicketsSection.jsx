@@ -1,33 +1,43 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { apiGetMyTickets, apiCreateTicket } from "../services/ticket.service";
 import { showApiError } from "../../../utils/api";
 import InputField from "../../../components/InputField";
 
-const statusBadge = (status) => {
-  const map = {
-    open: "bg-success",
-    pending: "bg-warning text-dark",
-    closed: "bg-secondary",
-  };
-  const cls = map[status] ?? "bg-light text-dark";
-  return <span className={`badge ${cls}`}>{status}</span>;
+const STATUS_META = {
+  open:       { cls: "bg-success",           label: "Open" },
+  pending:    { cls: "bg-warning text-dark",  label: "Pending" },
+  closed:     { cls: "bg-secondary",          label: "Closed" },
+  adminReply: { cls: "bg-info text-dark",     label: "Admin Replied" },
+  userReply:  { cls: "bg-primary",            label: "You Replied" },
 };
 
-const UserTicketsSection = () => {
-  const navigate = useNavigate();
-  const [tickets, setTickets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ subject: "", description: "" });
-  const [file, setFile] = useState(null);
+const statusBadge = (status) => {
+  const m = STATUS_META[status] ?? { cls: "bg-light text-dark", label: status };
+  return <span className={`badge ${m.cls}`}>{m.label}</span>;
+};
+
+const EMPTY_FORM = { subject: "", description: "" };
+
+const UserTicketsSection = ({ onTicketsLoaded }) => {
+  const navigate   = useNavigate();
+  const fileRef    = useRef(null);
+
+  const [tickets,    setTickets]    = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [form,       setForm]       = useState(EMPTY_FORM);
+  const [file,       setFile]       = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showForm,   setShowForm]   = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
       const data = await apiGetMyTickets();
-      setTickets(data.tickets ?? []);
+      const list = data.tickets ?? [];
+      setTickets(list);
+      onTicketsLoaded?.(list);
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
     } finally {
@@ -35,26 +45,27 @@ const UserTicketsSection = () => {
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCancel = () => {
+    setForm(EMPTY_FORM);
+    setFile(null);
+    if (fileRef.current) fileRef.current.value = "";
+    // form stays open — just fields get cleared
+  };
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!form.subject.trim()) {
-      toast.error("Subject is required");
-      return;
-    }
+    if (!form.subject.trim()) { toast.error("Subject is required"); return; }
     setSubmitting(true);
     try {
       await apiCreateTicket({
-        subject: form.subject.trim(),
+        subject:     form.subject.trim(),
         description: form.description.trim(),
         file,
       });
       toast.success("Ticket created");
-      setForm({ subject: "", description: "" });
-      setFile(null);
+      handleCancel();
       load();
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
@@ -65,51 +76,75 @@ const UserTicketsSection = () => {
 
   return (
     <>
-      <h5 className="fw-bold mb-4">My Tickets</h5>
-
-      <div className="card border-0 shadow-sm rounded-3 mb-4">
-        <div className="card-body">
-          <h6 className="fw-semibold mb-3">Open a new ticket</h6>
-          <form onSubmit={handleCreate} noValidate>
-            <InputField
-              label="Subject"
-              id="ticketSubject"
-              name="subject"
-              value={form.subject}
-              onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))}
-            />
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Description</label>
-              <textarea
-                name="description"
-                className="form-control"
-                rows={4}
-                value={form.description}
-                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-              />
-            </div>
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Attachment (optional)</label>
-              <input
-                type="file"
-                className="form-control"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
-            </div>
-            <button type="submit" disabled={submitting} className="btn btn-warning fw-semibold">
-              {submitting ? "Submitting…" : "Submit ticket"}
-            </button>
-          </form>
-        </div>
+      <div className="d-flex align-items-center justify-content-between mb-4">
+        <h5 className="fw-bold mb-0">My Tickets</h5>
+        {!showForm && (
+          <button
+            type="button"
+            className="btn btn-warning btn-sm fw-semibold"
+            onClick={() => setShowForm(true)}
+          >
+            + New Ticket
+          </button>
+        )}
       </div>
 
+      {/* ── Create ticket form ── */}
+      {showForm && (
+        <div className="card border-0 shadow-sm rounded-3 mb-4">
+          <div className="card-body">
+            <h6 className="fw-semibold mb-3">Create a new ticket</h6>
+            <form onSubmit={handleCreate} noValidate>
+              <InputField
+                label="Subject"
+                id="ticketSubject"
+                name="subject"
+                value={form.subject}
+                onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))}
+              />
+              <div className="mb-3">
+                <label className="form-label fw-semibold">Description</label>
+                <textarea
+                  name="description"
+                  className="form-control"
+                  rows={4}
+                  value={form.description}
+                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label fw-semibold">Attachment (optional)</label>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  className="form-control"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+              <div className="d-flex gap-2">
+                <button type="submit" disabled={submitting} className="btn btn-warning fw-semibold">
+                  {submitting ? "Submitting…" : "Submit"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary fw-semibold"
+                  onClick={handleCancel}
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Ticket list ── */}
       <div className="card border-0 shadow-sm rounded-3">
         <div className="card-body">
           <h6 className="fw-semibold mb-3">Your tickets</h6>
           {loading ? (
-            <div className="text-center py-4">
-              <div className="spinner-border text-warning" />
-            </div>
+            <div className="text-center py-4"><div className="spinner-border text-warning" /></div>
           ) : tickets.length === 0 ? (
             <p className="text-muted mb-0">No tickets yet.</p>
           ) : (
@@ -129,7 +164,14 @@ const UserTicketsSection = () => {
                       style={{ cursor: "pointer" }}
                       onClick={() => navigate(`/tickets/${t.id}`)}
                     >
-                      <td className="fw-semibold">{t.subject}</td>
+                      <td className="fw-semibold">
+                        {t.status === "adminReply" && (
+                          <span className="badge bg-info text-dark me-2" style={{ fontSize: 10 }}>
+                            New reply
+                          </span>
+                        )}
+                        {t.subject}
+                      </td>
                       <td>{statusBadge(t.status)}</td>
                       <td className="text-muted small">
                         {t.createdAt ? new Date(t.createdAt).toLocaleString() : "—"}

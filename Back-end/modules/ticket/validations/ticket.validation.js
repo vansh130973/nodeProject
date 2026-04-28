@@ -10,12 +10,12 @@ export const addMessageSchema = Joi.object({
 });
 
 export const updateTicketStatusSchema = Joi.object({
-  status: Joi.string().valid("open", "pending", "closed").required(),
+  status: Joi.string().valid("open", "pending", "closed", "adminReply", "userReply").required(),
 });
 
 export const listTicketsQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).optional(),
   limit: Joi.number().integer().min(1).max(100).optional(),
-  status: Joi.string().valid("open", "pending", "closed", "all", "").optional(),
+  status: Joi.string().valid("open", "pending", "closed", "adminReply", "userReply", "all", "").optional(),
   search: Joi.string().trim().allow("").optional(),
 });

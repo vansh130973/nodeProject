@@ -35,6 +35,7 @@ import useAdminData from "../hooks/useAdminData";
 import InputField from "../../../components/InputField";
 import AdminTicketsSection from "../../ticket/components/AdminTicketsSection";
 import AdminTicketDetailSection from "../../ticket/components/AdminTicketDetailSection";
+import { apiAdminGetUnreadCount } from "../../ticket/services/ticket.service";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 const INITIAL_ADMIN_FORM = { userName: "", email: "", phone: "", roleId: "", password: "", conformPassword: "" };
@@ -1393,6 +1394,15 @@ const AdminDashboard = () => {
 
   const [loadingData,     setLoadingData]     = useState(false);
   const [sidebarOpen,     setSidebarOpen]     = useState(true);
+  const [unreadCount,     setUnreadCount]     = useState(0);
+  const [seenTicketIds,   setSeenTicketIds]   = useState(new Set());
+
+  // Fetch unread count on mount so badge is visible on any tab
+  useEffect(() => {
+    apiAdminGetUnreadCount()
+      .then((count) => setUnreadCount(count))
+      .catch(() => {});
+  }, []);
   const [adminForm,       setAdminForm]       = useState(INITIAL_ADMIN_FORM);
   const [adminFormErrors, setAdminFormErrors] = useState({});
   const [adminFormLoading,setAdminFormLoading]= useState(false);
@@ -1568,6 +1578,19 @@ const AdminDashboard = () => {
     });
   }, []); // eslint-disable-line
 
+  // ─── Unread ticket helpers ───────────────────────────────────────────────────
+  const handleAdminUnreadChange = (count) => setUnreadCount(count);
+
+  const handleAdminTicketViewed = (ticketId) => {
+    setSeenTicketIds((prev) => {
+      if (prev.has(ticketId)) return prev;
+      const next = new Set(prev);
+      next.add(ticketId);
+      return next;
+    });
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+  };
+
   // ─── Sidebar ────────────────────────────────────────────────────────────────
   const NAV_ITEMS = [
     { label: "Dashboard",  path: "/admin/dashboard", tab: "dashboard", icon: "bi-speedometer2", moduleKey: "dashboard", action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
@@ -1594,13 +1617,19 @@ const AdminDashboard = () => {
               tab === "tickets"
                 ? activeTab === "tickets" || activeTab === "ticketDetail"
                 : activeTab === tab;
+            const showBadge = tab === "tickets" && unreadCount > 0;
             return (
             <button key={tab} onClick={() => navigate(path)}
               className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
                 ${navActive ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
               title={!sidebarOpen ? label : ""}>
               <i className={`bi ${icon} fs-5 flex-shrink-0`} />
-              {sidebarOpen && <span className="small">{label}</span>}
+              {sidebarOpen && <span className="small flex-grow-1">{label}</span>}
+              {showBadge && (
+                <span className="badge rounded-pill bg-danger" style={{ fontSize: 11 }}>
+                  {unreadCount}
+                </span>
+              )}
             </button>
             );
           })}
@@ -1975,11 +2004,11 @@ const AdminDashboard = () => {
 
       case "tickets":
         if (!canAccess("tickets", "canView")) { navigate("/unauthorized"); return null; }
-        return <AdminTicketsSection />;
+        return <AdminTicketsSection onUnreadChange={handleAdminUnreadChange} />;
 
       case "ticketDetail":
         if (!canAccess("tickets", "canView")) { navigate("/unauthorized"); return null; }
-        return <AdminTicketDetailSection />;
+        return <AdminTicketDetailSection onTicketViewed={handleAdminTicketViewed} />;
 
       case "roles":
         if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
