@@ -5,10 +5,6 @@ export const apiGetAllModules = () =>
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
-export const apiGetModule = (id) =>
-  fetch(`${BASE_URL}/admin/modules/${id}`, {
-    headers: getAuthHeaders(),
-  }).then(handleResponse);
 
 export const apiCreateModule = (body) =>
   fetch(`${BASE_URL}/admin/modules`, {

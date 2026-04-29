@@ -6,11 +6,10 @@ import { showApiError } from "../../../utils/api";
 import InputField from "../../../components/InputField";
 
 const STATUS_META = {
-  open:       { cls: "bg-success",           label: "Open" },
-  pending:    { cls: "bg-warning text-dark",  label: "Pending" },
-  closed:     { cls: "bg-secondary",          label: "Closed" },
-  adminReply: { cls: "bg-info text-dark",     label: "Admin Replied" },
-  userReply:  { cls: "bg-primary",            label: "You Replied" },
+  open:       { cls: "bg-success",        label: "Open" },
+  closed:     { cls: "bg-secondary",      label: "Closed" },
+  adminReply: { cls: "bg-info text-dark", label: "Admin Replied" },
+  userReply:  { cls: "bg-primary",        label: "You Replied" },
 };
 
 const statusBadge = (status) => {
@@ -51,7 +50,7 @@ const UserTicketsSection = ({ onTicketsLoaded }) => {
     setForm(EMPTY_FORM);
     setFile(null);
     if (fileRef.current) fileRef.current.value = "";
-    // form stays open — just fields get cleared
+    setShowForm(false);
   };
 
   const handleCreate = async (e) => {

@@ -13,6 +13,7 @@ import {
   insertTicketMessage,
   updateTicketStatus,
   touchTicket,
+  getUnreadCount,
 } from "../models/ticket.model.js";
 import {
   buildFileUrl,
@@ -160,7 +161,11 @@ export const listTicketsAdmin = async (req, res) => {
     const status = req.query.status ?? "";
     const search = req.query.search ?? "";
 
-    const { tickets, pagination } = await listAllTickets({ page, limit, status, search });
+    // Fetch tickets list and unread count in parallel — single round-trip
+    const [{ tickets, pagination }, unreadCount] = await Promise.all([
+      listAllTickets({ page, limit, status, search }),
+      getUnreadCount(),
+    ]);
 
     const enriched = tickets.map((t) => ({
       id: t.id,
@@ -174,7 +179,7 @@ export const listTicketsAdmin = async (req, res) => {
       email: t.email,
     }));
 
-    return sendSuccessResponse(res, "Tickets loaded", { tickets: enriched, pagination });
+    return sendSuccessResponse(res, "Tickets loaded", { tickets: enriched, pagination, unreadCount });
   } catch (error) {
     console.error("listTicketsAdmin error:", error);
     return sendErrorResponse(res, "Server error", 500);

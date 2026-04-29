@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
@@ -13,7 +13,6 @@ import useUserProfile from "../hooks/useUserProfile";
 import InputField from "../../../components/InputField";
 import UserTicketsSection from "../../ticket/components/UserTicketsSection";
 import UserTicketDetailSection from "../../ticket/components/UserTicketDetailSection";
-import { apiUserGetUnreadCount } from "../../ticket/services/ticket.service";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 
@@ -37,12 +36,7 @@ const UserDashboard = () => {
   const [unreadCount,    setUnreadCount]    = useState(0);
   const [seenTicketIds,  setSeenTicketIds]  = useState(new Set());
 
-  // Fetch unread count immediately on mount so badge shows on any tab
-  useEffect(() => {
-    apiUserGetUnreadCount()
-      .then((count) => setUnreadCount(count))
-      .catch(() => {}); // silent — badge is non-critical
-  }, []);
+  // unreadCount is derived from the ticket list in handleTicketsLoaded when user visits Tickets tab
 
   const handleTicketsLoaded = (tickets) => {
     const count = tickets.filter(

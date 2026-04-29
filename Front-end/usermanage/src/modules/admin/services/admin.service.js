@@ -61,11 +61,6 @@ export const apiDeleteUser = (id) =>
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
-export const apiLogoutUserByAdmin = (id) =>
-  fetch(`${BASE_URL}/admin/users/${id}/logout`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-  }).then(handleResponse);
 
 // ─── Admins ───────────────────────────────────────────────────────────────────
 
@@ -102,18 +97,9 @@ export const apiDeleteAdmin = (id) =>
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
-export const apiLogoutAdminByMaster = (id) =>
-  fetch(`${BASE_URL}/admin/admins/${id}/logout`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-  }).then(handleResponse);
 
 // ─── Own Profile ──────────────────────────────────────────────────────────────
 
-export const apiGetAdminProfile = () =>
-  fetch(`${BASE_URL}/admin/profile`, {
-    headers: getAuthHeaders(),
-  }).then(handleResponse);
 
 export const apiEditAdminProfile = (formData) =>
   fetch(`${BASE_URL}/admin/profile`, {

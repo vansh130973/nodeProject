@@ -35,7 +35,7 @@ import useAdminData from "../hooks/useAdminData";
 import InputField from "../../../components/InputField";
 import AdminTicketsSection from "../../ticket/components/AdminTicketsSection";
 import AdminTicketDetailSection from "../../ticket/components/AdminTicketDetailSection";
-import { apiAdminGetUnreadCount } from "../../ticket/services/ticket.service";
+// ticket API is called inside AdminTicketsSection — no direct import needed here
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 const INITIAL_ADMIN_FORM = { userName: "", email: "", phone: "", roleId: "", password: "", conformPassword: "" };
@@ -1356,8 +1356,6 @@ const AdminDashboard = () => {
     };
 
     syncPermissions();
-    window.addEventListener("focus", syncPermissions);
-    return () => window.removeEventListener("focus", syncPermissions);
   }, [user, isMasterAdmin]);
 
   const canAccess = useCallback((moduleKey, action = "canView") => {
@@ -1397,12 +1395,7 @@ const AdminDashboard = () => {
   const [unreadCount,     setUnreadCount]     = useState(0);
   const [seenTicketIds,   setSeenTicketIds]   = useState(new Set());
 
-  // Fetch unread count on mount so badge is visible on any tab
-  useEffect(() => {
-    apiAdminGetUnreadCount()
-      .then((count) => setUnreadCount(count))
-      .catch(() => {});
-  }, []);
+  // unreadCount is now returned by apiAdminListTickets — updated via onUnreadChange from AdminTicketsSection
   const [adminForm,       setAdminForm]       = useState(INITIAL_ADMIN_FORM);
   const [adminFormErrors, setAdminFormErrors] = useState({});
   const [adminFormLoading,setAdminFormLoading]= useState(false);
@@ -1434,14 +1427,17 @@ const AdminDashboard = () => {
   }, [activeTab]); // eslint-disable-line
 
   useEffect(() => {
-    if (!isMasterAdmin) return;
+    if (user?.role !== "MASTER_ADMIN") return;
+    if (activeTab !== "addAdmin" && activeTab !== "admins") return;
+    if (availableRoles.length > 0) return; // already loaded
     apiGetAllRoles()
       .then((res) => {
         const roleOptions = (res.roles || []).filter((role) => role.status === "active" && !role.isDeleted);
         setAvailableRoles(roleOptions);
       })
       .catch((err) => showApiError(err, toast.error));
-  }, [isMasterAdmin]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]); // Fetch only when the relevant tabs are opened
 
   // ─── Users helpers ──────────────────────────────────────────────────────────
   const applyFilter = useCallback((status, search, page = 1) => {

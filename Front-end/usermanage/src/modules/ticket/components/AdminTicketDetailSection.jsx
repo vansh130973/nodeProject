@@ -9,11 +9,10 @@ import {
 import { showApiError } from "../../../utils/api";
 
 const STATUS_META = {
-  open:       { cls: "bg-success",           label: "Open" },
-  pending:    { cls: "bg-warning text-dark",  label: "Pending" },
-  closed:     { cls: "bg-secondary",          label: "Closed" },
-  adminReply: { cls: "bg-info text-dark",     label: "Admin Replied" },
-  userReply:  { cls: "bg-danger",             label: "User Replied" },
+  open:{ cls:"bg-success",label:"Open" },
+  closed:{ cls:"bg-secondary",label:"Closed" },
+  adminReply:{ cls:"bg-info text-dark",label:"Admin Replied" },
+  userReply:{ cls:"bg-danger",label:"User Replied" },
 };
 
 const StatusBadge = ({ status }) => {
@@ -139,9 +138,6 @@ const AdminTicketDetailSection = ({ onTicketViewed }) => {
             onChange={(e) => handleStatus(e.target.value)}
           >
             <option value="open">Open</option>
-            <option value="pending">Pending</option>
-            <option value="adminReply">Admin Replied</option>
-            <option value="userReply">User Replied</option>
             <option value="closed">Closed</option>
           </select>
         </div>
@@ -175,7 +171,6 @@ const AdminTicketDetailSection = ({ onTicketViewed }) => {
         </div>
       )}
 
-      {/* ── WhatsApp-style conversation ── */}
       <h6 className="fw-semibold mb-2">Conversation</h6>
       <div
         className="rounded-3 p-3 mb-3"
@@ -237,7 +232,7 @@ const AdminTicketDetailSection = ({ onTicketViewed }) => {
                 className="form-control mb-2"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
-              <button type="submit" disabled={sending} className="btn btn-warning fw-semibold">
+              <button type="submit" disabled={sending} className="btn btn-warning fw-semibold me-2">
                 {sending ? "Sending…" : "Send"}
               </button>
               <button

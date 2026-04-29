@@ -9,11 +9,10 @@ import {
 import { showApiError } from "../../../utils/api";
 
 const STATUS_META = {
-  open:       { cls: "bg-success",           label: "Open" },
-  pending:    { cls: "bg-warning text-dark",  label: "Pending" },
-  closed:     { cls: "bg-secondary",          label: "Closed" },
-  adminReply: { cls: "bg-info text-dark",     label: "Admin Replied" },
-  userReply:  { cls: "bg-primary",            label: "You Replied" },
+  open:{cls:"bg-success",label: "Open" },
+  closed:{cls:"bg-secondary",label: "Closed" },
+  adminReply:{cls:"bg-info text-dark",label: "Admin Replied" },
+  userReply:{cls:"bg-primary",label: "You Replied" },
 };
 
 const StatusBadge = ({ status }) => {
@@ -224,7 +223,7 @@ const UserTicketDetailSection = ({ onTicketViewed }) => {
                 className="form-control mb-2"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
-              <button type="submit" disabled={sending} className="btn btn-warning fw-semibold">
+              <button type="submit" disabled={sending} className="btn btn-warning fw-semibold me-2">
                 {sending ? "Sending…" : "Send"}
               </button>
               <button

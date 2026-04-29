@@ -7,11 +7,10 @@ import { showApiError } from "../../../utils/api";
 const PAGE_OPTS = [5, 10, 25, 50];
 
 const STATUS_META = {
-  open:       { cls: "bg-success",           label: "Open" },
-  pending:    { cls: "bg-warning text-dark",  label: "Pending" },
-  closed:     { cls: "bg-secondary",          label: "Closed" },
-  adminReply: { cls: "bg-info text-dark",     label: "Admin Replied" },
-  userReply:  { cls: "bg-danger",             label: "User Replied" },
+  open:       { cls: "bg-success",        label: "Open" },
+  closed:     { cls: "bg-secondary",      label: "Closed" },
+  adminReply: { cls: "bg-info text-dark", label: "Admin Replied" },
+  userReply:  { cls: "bg-danger",         label: "User Replied" },
 };
 
 const statusBadge = (status) => {
@@ -40,12 +39,9 @@ const AdminTicketsSection = ({ onUnreadChange }) => {
       const list = data.tickets ?? [];
       setTickets(list);
       if (data.pagination) setPagination(data.pagination);
-      // Report unread count to parent when loading all/userReply
-      if (st === "all" || st === "userReply") {
-        const unread = st === "userReply"
-          ? (data.pagination?.total ?? 0)
-          : list.filter((t) => t.status === "userReply").length;
-        onUnreadChange?.(unread);
+      // unreadCount is now included in every list response — no extra API call needed
+      if (typeof data.unreadCount === "number") {
+        onUnreadChange?.(data.unreadCount);
       }
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
@@ -95,8 +91,8 @@ const AdminTicketsSection = ({ onUnreadChange }) => {
           >
             <option value="all">All</option>
             <option value="open">Open</option>
-            <option value="adminReply">Admin Replied</option>
             <option value="userReply">User Replied</option>
+            <option value="adminReply">Admin Replied</option>
             <option value="closed">Closed</option>
           </select>
           <input

@@ -136,3 +136,10 @@ export const updateTicketStatus = async (ticketId, status) => {
 export const touchTicket = async (ticketId) => {
   await db.query("UPDATE tickets SET updatedAt = NOW() WHERE id = ?", [ticketId]);
 };
+
+export const getUnreadCount = async () => {
+  const [[row]] = await db.query(
+    "SELECT COUNT(*) AS total FROM tickets WHERE status = 'userReply'"
+  );
+  return row?.total ?? 0;
+};
