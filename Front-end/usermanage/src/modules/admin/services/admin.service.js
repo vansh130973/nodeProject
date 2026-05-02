@@ -5,7 +5,7 @@ export const apiLoginAdmin = (body) =>
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  }).then(handleResponse);
+  }).then((res) => handleResponse(res, { suppressSessionToast: true }));
 
 export const apiLogoutAdmin = () =>
   fetch(`${BASE_URL}/admin/logout`, {

@@ -1338,7 +1338,7 @@ const AdminDashboard = () => {
   } = useAdminData();
   const permissionMap = useMemo(() => user?.permissions ?? {}, [user]);
   const [livePermissions, setLivePermissions] = useState(permissionMap);
-  const isMasterAdmin = user?.role === "MASTER_ADMIN";
+  const isMasterAdmin = user?.userName === "admin";
   useEffect(() => {
     setLivePermissions(permissionMap);
   }, [permissionMap]);
@@ -1427,7 +1427,7 @@ const AdminDashboard = () => {
   }, [activeTab]); // eslint-disable-line
 
   useEffect(() => {
-    if (user?.role !== "MASTER_ADMIN") return;
+    if (user?.userName !== "admin") return;
     if (activeTab !== "addAdmin" && activeTab !== "admins") return;
     if (availableRoles.length > 0) return; // already loaded
     apiGetAllRoles()
@@ -1653,7 +1653,7 @@ const AdminDashboard = () => {
                   { label: "Pending Users",  value: dashboardCounts.pendingUsers,  color: "#ffc107", path: "/admin/users" },
                   { label: "Inactive Users", value: dashboardCounts.inactiveUsers, color: "#6c757d", path: null },
                   { label: "Deleted Users",  value: dashboardCounts.deletedUsers,  color: "#dc3545", path: null },
-                  ...(user?.role === "MASTER_ADMIN"
+                  ...(user?.userName === "admin"
                     ? [{ label: "Total Admins", value: dashboardCounts.totalAdmins, color: "#fd7e14", path: "/admin/admins" }]
                     : []),
                 ].map(({ label, value, color, path }) => (
@@ -1822,7 +1822,7 @@ const AdminDashboard = () => {
 
       // ── All Admins (Full CRUD) ─────────────────────────────────────────────
       case "admins":
-        if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
+        if (user?.userName !== "admin") { navigate("/admin/dashboard"); return null; }
         return (
           <>
             <div className="d-flex align-items-center justify-content-between mb-3">
@@ -1940,7 +1940,7 @@ const AdminDashboard = () => {
 
       // ── Add Admin ──────────────────────────────────────────────────────────
       case "addAdmin":
-        if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
+        if (user?.userName !== "admin") { navigate("/admin/dashboard"); return null; }
         return (
           <div className="row justify-content-center">
             <div className="col-md-8 col-lg-6">
@@ -1995,7 +1995,7 @@ const AdminDashboard = () => {
         );
 
       case "modules":
-        if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
+        if (user?.userName !== "admin") { navigate("/admin/dashboard"); return null; }
         return <ModulesTab />;
 
       case "tickets":
@@ -2004,10 +2004,10 @@ const AdminDashboard = () => {
 
       case "ticketDetail":
         if (!canAccess("tickets", "canView")) { navigate("/unauthorized"); return null; }
-        return <AdminTicketDetailSection onTicketViewed={handleAdminTicketViewed} />;
+        return <AdminTicketDetailSection onTicketViewed={handleAdminTicketViewed} canEdit={canAccess("tickets", "canEdit")} />;
 
       case "roles":
-        if (user?.role !== "MASTER_ADMIN") { navigate("/admin/dashboard"); return null; }
+        if (user?.userName !== "admin") { navigate("/admin/dashboard"); return null; }
         return <RolesTab />;
 
       case "profile":

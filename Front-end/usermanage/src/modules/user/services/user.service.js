@@ -11,7 +11,7 @@ export const apiLoginUser = (body) =>
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  }).then(handleResponse);
+  }).then((res) => handleResponse(res, { suppressSessionToast: true }));
 
 export const apiLogoutUser = () =>
   fetch(`${BASE_URL}/logout`, {

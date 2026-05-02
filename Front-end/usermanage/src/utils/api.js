@@ -13,17 +13,28 @@ export const getBearerHeader = () => ({
 
 // ─── Central response handler ─────────────────────────────────────────────────
 let sessionExpiredShown = false;
-export const handleResponse = async (res) => {
+
+// Login endpoints — on these routes a 401 means "bad credentials",
+// NOT an expired session, so we must never show the session-expired toast.
+const LOGIN_PATHS = ["/admin/login", "/login"];
+
+export const handleResponse = async (res, { suppressSessionToast = false } = {}) => {
   const data = await res.json();
 
   if (res.status === 401) {
-    localStorage.removeItem("token");
-
-    if (!sessionExpiredShown) {
-      sessionExpiredShown = true;
-      toast.error("Session expired. Please log in again.");
+    // Only treat as session expiry when we're NOT on a login endpoint
+    if (!suppressSessionToast) {
+      localStorage.removeItem("token");
+      if (!sessionExpiredShown) {
+        sessionExpiredShown = true;
+        toast.error("Session expired. Please log in again.");
+      }
     }
-    return;
+    // In all cases, throw so the caller's catch block can set inline errors
+    const message = data.message || "Invalid credentials";
+    const err = new Error(message);
+    err.status = 401;
+    throw err;
   }
 
   if (!res.ok || !data.success) {

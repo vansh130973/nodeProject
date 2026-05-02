@@ -18,6 +18,31 @@ const statusBadge = (status) => {
   return <span className={`badge ${m.cls}`}>{m.label}</span>;
 };
 
+const NewReplyBadge = () => (
+  <>
+    <style>{`
+      .nr-num-badge-admin {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        font-size: 11px;
+        font-weight: 700;
+        color: #fff;
+        background: #dc3545;
+        vertical-align: middle;
+        margin-right: 7px;
+        animation: nrPopAdmin 0.3s ease-out forwards;
+        flex-shrink: 0;
+        line-height: 1;
+      }
+    `}</style>
+    <span className="nr-num-badge-admin">1</span>
+  </>
+);
+
 const AdminTicketsSection = ({ onUnreadChange }) => {
   const navigate = useNavigate();
   const [tickets,      setTickets]      = useState([]);
@@ -39,7 +64,6 @@ const AdminTicketsSection = ({ onUnreadChange }) => {
       const list = data.tickets ?? [];
       setTickets(list);
       if (data.pagination) setPagination(data.pagination);
-      // unreadCount is now included in every list response — no extra API call needed
       if (typeof data.unreadCount === "number") {
         onUnreadChange?.(data.unreadCount);
       }
@@ -133,12 +157,8 @@ const AdminTicketsSection = ({ onUnreadChange }) => {
                         onClick={() => navigate(`/admin/tickets/${t.id}`)}
                       >
                         <td className="fw-semibold">
-                          {t.status === "userReply" && (
-                            <span className="badge bg-danger me-2" style={{ fontSize: 10 }}>
-                              New reply
-                            </span>
-                          )}
-                          {t.subject}
+                          {t.subject}&nbsp;
+                          {t.status === "userReply" && <NewReplyBadge />}
                         </td>
                         <td className="small">
                           <div>{t.userName}</div>

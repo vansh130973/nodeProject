@@ -17,6 +17,32 @@ const statusBadge = (status) => {
   return <span className={`badge ${m.cls}`}>{m.label}</span>;
 };
 
+/* ── New-reply number bubble ── */
+const NewReplyBadge = () => (
+  <>
+    <style>{`
+      .nr-num-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        font-size: 11px;
+        font-weight: 700;
+        color: #fff;
+        background: #dc3545;
+        vertical-align: middle;
+        margin-right: 7px;
+        animation: nrPop 0.3s ease-out forwards;
+        flex-shrink: 0;
+        line-height: 1;
+      }
+    `}</style>
+    <span className="nr-num-badge">1</span>
+  </>
+);
+
 const EMPTY_FORM = { subject: "", description: "" };
 
 const UserTicketsSection = ({ onTicketsLoaded }) => {
@@ -164,12 +190,8 @@ const UserTicketsSection = ({ onTicketsLoaded }) => {
                       onClick={() => navigate(`/tickets/${t.id}`)}
                     >
                       <td className="fw-semibold">
-                        {t.status === "adminReply" && (
-                          <span className="badge bg-info text-dark me-2" style={{ fontSize: 10 }}>
-                            New reply
-                          </span>
-                        )}
-                        {t.subject}
+                        {t.subject}&nbsp;
+                        {t.isUnread === 1 && <NewReplyBadge />}
                       </td>
                       <td>{statusBadge(t.status)}</td>
                       <td className="text-muted small">

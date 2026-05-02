@@ -99,6 +99,13 @@ export const getTicketDetailUser = async (req, res) => {
     const ticket = await findTicketForUser(ticketId, req.user.id);
     if (!ticket) return sendErrorResponse(res, "Ticket not found", 404);
 
+    // User opened the ticket — if admin had replied, clear the unread badge
+    // by resetting status back to 'open' (ball is now in user's court, they've seen it)
+    if (ticket.status === "adminReply") {
+      await updateTicketStatus(ticketId, "open");
+      ticket.status = "open";
+    }
+
     const messages = await getTicketMessages(ticketId);
     return sendSuccessResponse(res, "Ticket loaded", {
       ticket: formatTicketRow(ticket),
@@ -161,7 +168,6 @@ export const listTicketsAdmin = async (req, res) => {
     const status = req.query.status ?? "";
     const search = req.query.search ?? "";
 
-    // Fetch tickets list and unread count in parallel — single round-trip
     const [{ tickets, pagination }, unreadCount] = await Promise.all([
       listAllTickets({ page, limit, status, search }),
       getUnreadCount(),
@@ -191,6 +197,11 @@ export const getTicketDetailAdmin = async (req, res) => {
     const ticketId = Number(req.params.id);
     const ticket = await findTicketWithOwner(ticketId);
     if (!ticket) return sendErrorResponse(res, "Ticket not found", 404);
+
+    if (ticket.status === "userReply") {
+      await updateTicketStatus(ticketId, "open");
+      ticket.status = "open";
+    }
 
     const messages = await getTicketMessages(ticketId);
 

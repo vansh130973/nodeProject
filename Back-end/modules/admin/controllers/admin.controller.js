@@ -26,6 +26,9 @@ import { findRoleById } from "../../role/models/role.model.js";
 import { formatAdminData } from "../helpers/admin.helper.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
 
+/** username "admin" = unrestricted super-admin */
+const isSuperAdmin = (userName) => userName === "admin";
+
 const parseLimit = (value, fallback = 10) => {
   if (String(value).toLowerCase() === "all") return "all";
   const parsed = parseInt(value, 10);
@@ -49,6 +52,11 @@ const buildPermissionMap = (permissions) =>
 export const addAdmin = async (req, res) => {
   try {
     const { userName, password, phone, email, roleId } = req.body;
+
+    // Prevent creating another "admin" super-admin account
+    if (isSuperAdmin(userName)) {
+      return sendErrorResponse(res, "Username 'admin' is reserved", 400);
+    }
 
     const existingUsers = await findAdminByEmailOrUsername(email, userName);
     if (existingUsers.length > 0) {
@@ -93,12 +101,24 @@ export const loginAdmin = async (req, res) => {
     const isMatch = await bcrypt.compare(String(password), admin.password);
     if (!isMatch) return sendErrorResponse(res, "Invalid password", 401);
 
-    const permissions = admin.role === "ADMIN" ? await getAdminPermissions(admin.roleId) : [];
-    const tokenPayload = formatAdminData({ ...admin, permissions: buildPermissionMap(permissions) });
+    // Super-admin gets no permission payload (has everything); others get their role's permissions
+    const permissions = isSuperAdmin(admin.userName)
+      ? []
+      : await getAdminPermissions(admin.roleId);
+
+    const syntheticRole = isSuperAdmin(admin.userName) ? "MASTER_ADMIN" : "ADMIN";
+    const tokenPayload = {
+      ...formatAdminData({
+        ...admin,
+        permissions: buildPermissionMap(permissions),
+      }),
+      role: syntheticRole, // needed by roleCheck middleware — not stored in DB anymore
+    };
+
     const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: "1h" });
     await saveAdminToken(admin.id, token);
 
-    return sendSuccessResponse(res, "Login successful", {token}, 200);
+    return sendSuccessResponse(res, "Login successful", { token }, 200);
 
   } catch (error) {
     console.error("loginAdmin error:", error);
@@ -132,21 +152,18 @@ export const getDashboard = async (req, res) => {
 
 export const getMyPermissions = async (req, res) => {
   try {
-    if (req.user.role === "MASTER_ADMIN") {
+    // Super-admin: signal full access to frontend
+    if (isSuperAdmin(req.user.userName)) {
       return sendSuccessResponse(res, "Permissions fetched successfully", {
         permissions: {},
-        isMasterAdmin: true,
+        isSuperAdmin: true,
       });
-    }
-
-    if (req.user.role !== "ADMIN") {
-      return sendErrorResponse(res, "Access denied.", 403);
     }
 
     const permissions = await getAdminPermissions(req.user.roleId);
     return sendSuccessResponse(res, "Permissions fetched successfully", {
       permissions: buildPermissionMap(permissions),
-      isMasterAdmin: false,
+      isSuperAdmin: false,
     });
   } catch (error) {
     console.error("getMyPermissions error:", error);
@@ -294,7 +311,8 @@ export const getAdminById = async (req, res) => {
   try {
     const admin = await findAdminById(req.params.id);
     if (!admin) return sendErrorResponse(res, "Admin not found", 404);
-    if (admin.role === "MASTER_ADMIN") return sendErrorResponse(res, "Forbidden", 403);
+    // Protect the super-admin account from being fetched/edited via API
+    if (isSuperAdmin(admin.userName)) return sendErrorResponse(res, "Forbidden", 403);
     return sendSuccessResponse(res, "Admin fetched successfully", { admin: formatAdminData(admin) });
   } catch (error) {
     console.error("getAdminById error:", error);
@@ -306,18 +324,17 @@ export const editAdmin = async (req, res) => {
   try {
     const { id } = req.params;
     const { userName, email, phone, password, roleId } = req.body;
+
     const role = await findRoleById(roleId);
     if (!role || role.status !== "active" || role.isDeleted) {
       return sendErrorResponse(res, "Selected role is invalid or inactive", 400);
     }
 
-
     const admin = await findAdminById(id);
     if (!admin) return sendErrorResponse(res, "Admin not found", 404);
-    if (admin.role === "MASTER_ADMIN") return sendErrorResponse(res, "Cannot edit MASTER_ADMIN", 403);
+    if (isSuperAdmin(admin.userName)) return sendErrorResponse(res, "Cannot edit the super-admin account", 403);
     if (admin.status === "deleted") return sendErrorResponse(res, "Cannot edit deleted admin", 400);
 
-    // Check uniqueness for userName/email (excluding self)
     const conflicts = await findAdminByEmailOrUsername(email, userName);
     const others = conflicts.filter((a) => a.id !== Number(id));
     if (others.some((a) => a.email === email))    return sendErrorResponse(res, "Email already registered", 409);
@@ -328,14 +345,7 @@ export const editAdmin = async (req, res) => {
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
-    const updated = await updateAdminByMaster(id, {
-      userName,
-      email,
-      phone,
-      password: hashedPassword,
-      roleId,
-    });
-
+    const updated = await updateAdminByMaster(id, { userName, email, phone, password: hashedPassword, roleId });
     await deleteAllAdminTokens(id);
 
     return sendSuccessResponse(res, "Admin updated successfully", { admin: formatAdminData(updated) });
@@ -351,7 +361,7 @@ export const deleteAdmin = async (req, res) => {
 
     const admin = await findAdminById(id);
     if (!admin) return sendErrorResponse(res, "Admin not found", 404);
-    if (admin.role === "MASTER_ADMIN") return sendErrorResponse(res, "Cannot delete MASTER_ADMIN", 403);
+    if (isSuperAdmin(admin.userName)) return sendErrorResponse(res, "Cannot delete the super-admin account", 403);
     if (admin.status === "deleted") return sendErrorResponse(res, "Already deleted", 400);
 
     await softDeleteAdmin(id);
@@ -361,6 +371,7 @@ export const deleteAdmin = async (req, res) => {
     return sendErrorResponse(res, "Server error", 500);
   }
 };
+
 // ─── OWN PROFILE ─────────────────────────────────────────────────────────────
 
 import {
@@ -385,7 +396,6 @@ export const editAdminProfile = async (req, res) => {
     const id = req.user.id;
     const { userName, email, phone } = req.body;
 
-    // Check uniqueness (exclude self)
     const existing = await findAdminByEmailOrUsername(email, userName);
     const conflict = existing.filter((a) => a.id !== id);
     if (conflict.some((a) => a.email === email))
@@ -414,7 +424,6 @@ export const changeAdminOwnPassword = async (req, res) => {
 
     const hashed = await bcrypt.hash(String(newPassword), 10);
     await updateAdminPassword(id, hashed);
-    // Invalidate all tokens
     await deleteAdminToken(id);
 
     return sendSuccessResponse(res, "Password changed. Please login again.");

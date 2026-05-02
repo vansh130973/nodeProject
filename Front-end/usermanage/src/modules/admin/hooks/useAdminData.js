@@ -43,7 +43,7 @@ const useAdminData = () => {
   };
 
   const fetchAdmins = async () => {
-    if (user?.role !== "MASTER_ADMIN") return;
+    if (user?.userName !== "admin") return;
     try {
       const res = await apiGetAllAdmins();
       setAdmins(res.admins);

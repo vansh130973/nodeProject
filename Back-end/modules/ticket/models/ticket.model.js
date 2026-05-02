@@ -50,7 +50,8 @@ export const findTicketForUser = async (ticketId, userId) => {
 
 export const listTicketsForUser = async (userId) => {
   const [rows] = await db.query(
-    `SELECT id, subject, status, createdAt
+    `SELECT id, subject, status, createdAt,
+            CASE WHEN status = 'adminReply' THEN 1 ELSE 0 END AS isUnread
      FROM tickets
      WHERE userId = ?
      ORDER BY createdAt DESC`,

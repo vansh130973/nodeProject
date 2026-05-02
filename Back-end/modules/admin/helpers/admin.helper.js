@@ -3,7 +3,6 @@ export const formatAdminData = (admin) => ({
   userName: admin.userName,
   email: admin.email,
   phone: admin.phone,
-  role: admin.role,
   roleId: admin.roleId ?? null,
   roleName: admin.roleName ?? null,
   permissions: admin.permissions ?? {},

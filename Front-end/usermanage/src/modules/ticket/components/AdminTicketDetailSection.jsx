@@ -36,7 +36,7 @@ const BUBBLE_OTHER = {
   boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
 };
 
-const AdminTicketDetailSection = ({ onTicketViewed }) => {
+const AdminTicketDetailSection = ({ onTicketViewed, canEdit = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const bottomRef = useRef(null);
@@ -130,6 +130,7 @@ const AdminTicketDetailSection = ({ onTicketViewed }) => {
         </div>
         <div className="d-flex align-items-center gap-2">
           <StatusBadge status={ticket.status} />
+          {canEdit && (
           <select
             className="form-select form-select-sm"
             style={{ minWidth: 140 }}
@@ -140,6 +141,7 @@ const AdminTicketDetailSection = ({ onTicketViewed }) => {
             <option value="open">Open</option>
             <option value="closed">Closed</option>
           </select>
+          )}
         </div>
       </div>
 
@@ -209,8 +211,12 @@ const AdminTicketDetailSection = ({ onTicketViewed }) => {
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Reply input – hidden when closed ── */}
-      {isClosed ? (
+      {/* ── Reply input – hidden when closed or view-only ── */}
+      {!canEdit ? (
+        <div className="alert alert-info text-center small mb-0">
+          You have view-only access. Replying to tickets is not permitted.
+        </div>
+      ) : isClosed ? (
         <div className="alert alert-secondary text-center small mb-0">
           This ticket is closed. No further replies can be sent.
         </div>

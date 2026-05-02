@@ -4,7 +4,10 @@ import { findAdminToken } from "../modules/admin/models/admin.model.js";
 import { getPermission } from "../modules/role/models/role.model.js";
 import { sendErrorResponse } from "../utils/response.js";
 
-// ─── authenticate ─────────────────────────────────────────────────────────────
+const isSuperAdmin = (user) => user?.userName === "admin";
+
+const isAdminPayload = (decoded) =>
+  decoded && decoded.id && !decoded.firstName;
 
 export const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -18,9 +21,7 @@ export const authenticate = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const isAdmin = decoded.role === "ADMIN" || decoded.role === "MASTER_ADMIN";
-
-    const savedToken = isAdmin
+    const savedToken = isAdminPayload(decoded)
       ? await findAdminToken(token)
       : await findUserToken(token);
 
@@ -38,7 +39,15 @@ export const authenticate = async (req, res, next) => {
 
 export const roleCheck = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    const user = req.user;
+
+    // "admin" username always passes any check that includes an admin role
+    if (isSuperAdmin(user)) {
+      const adminRoles = ["ADMIN", "MASTER_ADMIN"];
+      if (roles.some((r) => adminRoles.includes(r))) return next();
+    }
+
+    if (!roles.includes(user.role)) {
       return sendErrorResponse(res, "Access denied.", 403);
     }
     next();
@@ -66,15 +75,14 @@ const buildModuleAliases = (moduleNames) => {
 export const modulePermissionCheck = (moduleNames, action = "canView") => {
   return async (req, res, next) => {
     try {
-      if (req.user.role === "MASTER_ADMIN") return next();
-      if (req.user.role !== "ADMIN") {
-        return sendErrorResponse(res, "Access denied.", 403);
-      }
+      // "admin" username — unrestricted access to everything
+      if (isSuperAdmin(req.user)) return next();
 
+      // Dashboard is always reachable for any authenticated admin
       const aliases = buildModuleAliases(moduleNames);
-      // Keep dashboard reachable so admin can always land in panel after login.
       if (aliases.includes("dashboard")) return next();
 
+      // Regular admins must have a roleId and the correct permission
       if (!req.user.roleId) {
         return sendErrorResponse(res, "No role assigned to this admin.", 403);
       }

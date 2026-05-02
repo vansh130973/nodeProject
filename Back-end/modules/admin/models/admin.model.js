@@ -1,13 +1,14 @@
 import db from "../../../config/db.js";
 import { normalize } from "../helpers/admin.helper.js";
 
-const ADMIN_LIST = "a.id, a.userName, a.email, a.phone, a.role, a.roleId, r.name AS roleName, COALESCE(a.status, 'active') AS status, a.isDeleted, COALESCE(a.createdAt, NOW()) AS createdAt";
-const ADMIN_LOGIN = "id, userName, password, email, phone, role, roleId, COALESCE(status, 'active') AS status, isDeleted";
+// `role` column is gone — "admin" username = super admin (enforced in middleware)
+const ADMIN_LIST = "a.id, a.userName, a.email, a.phone, a.roleId, r.name AS roleName, COALESCE(a.status, 'active') AS status, a.isDeleted, COALESCE(a.createdAt, NOW()) AS createdAt";
+const ADMIN_LOGIN = "id, userName, password, email, phone, roleId, COALESCE(status, 'active') AS status, isDeleted";
 const USER_LIST = "u.id, u.firstName, u.lastName, u.userName, u.phone, u.email, u.gender, u.status, u.isDeleted, u.profilePicture, u.createdAt";
 
 export const findAdminByEmailOrUsername = async (email, userName) => {
   try {
-    const sql = "SELECT id, userName, email, role, roleId, COALESCE(status, 'active') AS status, isDeleted FROM admins WHERE isDeleted = 0 AND (email = ? OR userName = ?)";
+    const sql = "SELECT id, userName, email, roleId, COALESCE(status, 'active') AS status, isDeleted FROM admins WHERE isDeleted = 0 AND (email = ? OR userName = ?)";
     const [result] = await db.query(sql, [email, userName]);
     return result;
   } catch (error) {
@@ -56,8 +57,9 @@ export const getAdminsWithPaginationAndCount = async (page = 1, limit = 10, sear
     const isAll = limit === "all" || Number(limit) <= 0;
     const limitNum = isAll ? null : Number(limit);
     const offset = isAll ? 0 : (page - 1) * limitNum;
-    
-    let where = "WHERE a.role != 'MASTER_ADMIN'";
+
+    // Exclude the "admin" super-admin account from the managed list
+    let where = "WHERE a.userName != 'admin'";
     const params = [];
     const searchTerm = normalize(search);
 
@@ -67,13 +69,11 @@ export const getAdminsWithPaginationAndCount = async (page = 1, limit = 10, sear
       params.push(like, like, like);
     }
 
-    // Get data
     let dataSql = `SELECT ${ADMIN_LIST} FROM admins a LEFT JOIN roles r ON r.id = a.roleId ${where} ORDER BY a.id DESC`;
     if (!isAll) dataSql += " LIMIT ? OFFSET ?";
     const dataParams = isAll ? params : [...params, limitNum, offset];
     const [rows] = await db.query(dataSql, dataParams);
 
-    // Get count
     const countSql = `SELECT COUNT(*) AS total FROM admins a ${where}`;
     const [countResult] = await db.query(countSql, params);
     const total = countResult[0]?.total ?? 0;
@@ -88,12 +88,12 @@ export const getAdminsWithPaginationAndCount = async (page = 1, limit = 10, sear
 export const updateAdminByMaster = async (id, data) => {
   try {
     const { userName, email, phone, password, roleId } = data;
-    
+
     if (password) {
-      const sql = "UPDATE admins SET userName=?, email=?, phone=?, password=?, roleId=?, updatedAt=NOW() WHERE id=? AND role != 'MASTER_ADMIN'";
+      const sql = "UPDATE admins SET userName=?, email=?, phone=?, password=?, roleId=?, updatedAt=NOW() WHERE id=? AND userName != 'admin'";
       await db.query(sql, [userName, email, phone, password, roleId ?? null, id]);
     } else {
-      const sql = "UPDATE admins SET userName=?, email=?, phone=?, roleId=?, updatedAt=NOW() WHERE id=? AND role != 'MASTER_ADMIN'";
+      const sql = "UPDATE admins SET userName=?, email=?, phone=?, roleId=?, updatedAt=NOW() WHERE id=? AND userName != 'admin'";
       await db.query(sql, [userName, email, phone, roleId ?? null, id]);
     }
     return findAdminById(id);
@@ -105,7 +105,7 @@ export const updateAdminByMaster = async (id, data) => {
 
 export const softDeleteAdmin = async (id) => {
   try {
-    const sql1 = "UPDATE admins SET status='deleted', isDeleted=1, updatedAt=NOW() WHERE id=? AND role != 'MASTER_ADMIN'";
+    const sql1 = "UPDATE admins SET status='deleted', isDeleted=1, updatedAt=NOW() WHERE id=? AND userName != 'admin'";
     const sql2 = "DELETE FROM adminToken WHERE adminId=?";
     await db.query(sql1, [id]);
     await db.query(sql2, [id]);
@@ -122,7 +122,7 @@ export const getUsersWithPaginationAndCount = async (page = 1, limit = 10, statu
     const isAll = limit === "all" || Number(limit) <= 0;
     const limitNum = isAll ? null : Number(limit);
     const offset = isAll ? 0 : (page - 1) * limitNum;
-    
+
     const conditions = [];
     const params = [];
 
@@ -142,13 +142,11 @@ export const getUsersWithPaginationAndCount = async (page = 1, limit = 10, statu
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    // Get data
     let dataSql = `SELECT ${USER_LIST} FROM users u ${where} ORDER BY u.id DESC`;
     if (!isAll) dataSql += " LIMIT ? OFFSET ?";
     const dataParams = isAll ? params : [...params, limitNum, offset];
     const [rows] = await db.query(dataSql, dataParams);
 
-    // Get count
     const countSql = `SELECT COUNT(*) AS total FROM users u ${where}`;
     const [countResult] = await db.query(countSql, params);
     const total = countResult[0]?.total ?? 0;
@@ -205,7 +203,7 @@ export const forceLogoutUser = async (userId) => {
 
 export const getAllAdmins = async () => {
   try {
-    const sql = `SELECT ${ADMIN_LIST} FROM admins a LEFT JOIN roles r ON r.id = a.roleId WHERE a.role != 'MASTER_ADMIN'`;
+    const sql = `SELECT ${ADMIN_LIST} FROM admins a LEFT JOIN roles r ON r.id = a.roleId WHERE a.userName != 'admin'`;
     const [result] = await db.query(sql);
     return result;
   } catch (error) {
@@ -223,7 +221,7 @@ export const getDashboardCounts = async () => {
         SUM(CASE WHEN u.status = 'pending' AND u.isDeleted = 0 THEN 1 ELSE 0 END) AS pendingUsers,
         SUM(CASE WHEN u.status = 'inactive' AND u.isDeleted = 0 THEN 1 ELSE 0 END) AS inactiveUsers,
         SUM(CASE WHEN u.status = 'deleted' OR u.isDeleted = 1 THEN 1 ELSE 0 END) AS deletedUsers,
-        (SELECT COUNT(*) FROM admins WHERE role != 'MASTER_ADMIN' AND isDeleted = 0) AS totalAdmins
+        (SELECT COUNT(*) FROM admins WHERE userName != 'admin' AND isDeleted = 0) AS totalAdmins
       FROM users u
     `;
     const [[result]] = await db.query(sql);
@@ -237,7 +235,7 @@ export const getDashboardCounts = async () => {
 export const updateUserByAdmin = async (id, data) => {
   try {
     const { firstName, lastName, email, phone, gender, password } = data;
-    
+
     if (password) {
       const sql = "UPDATE users SET firstName=?, lastName=?, email=?, phone=?, gender=?, password=?, updatedAt=NOW() WHERE id=?";
       await db.query(sql, [firstName, lastName, email, phone, gender, password, id]);
@@ -298,7 +296,7 @@ export const deleteAllAdminTokens = async (adminId) => {
 export const getAdminPermissions = async (roleId) => {
   try {
     if (!roleId) return [];
-    
+
     const sql = `
       SELECT m.name AS moduleName, rp.canView, rp.canAdd, rp.canEdit, rp.canDelete
       FROM rolePermissions rp
@@ -321,12 +319,12 @@ export const updateAdminOwnProfile = async (id, data) => {
     const { userName, email, phone, profilePicture } = data;
     const fields = ["userName=?", "email=?", "phone=?"];
     const params = [userName, email, phone];
-    
+
     if (profilePicture !== undefined) {
       fields.push("profilePicture=?");
       params.push(profilePicture);
     }
-    
+
     params.push(id);
     const sql = `UPDATE admins SET ${fields.join(", ")} WHERE id=?`;
     await db.query(sql, params);
@@ -360,7 +358,7 @@ export const findAdminWithPasswordById = async (id) => {
 
 export const deleteTokensByRoleId = async (roleId) => {
   try {
-    const sql = "DELETE FROM adminToken WHERE adminId IN (SELECT id FROM admins WHERE roleId = ? AND role != 'MASTER_ADMIN')";
+    const sql = "DELETE FROM adminToken WHERE adminId IN (SELECT id FROM admins WHERE roleId = ? AND userName != 'admin')";
     await db.query(sql, [roleId]);
   } catch (error) {
     console.error("deleteTokensByRoleId error:", error);
