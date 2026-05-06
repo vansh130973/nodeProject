@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { BASE_URL } from "../utils/api";
 
 const TOKEN_KEY = "token";
 
@@ -13,7 +14,7 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) { setLoading(false); return; }
 
-    fetch("http://localhost:3200/me", {
+    fetch(`${BASE_URL}/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())

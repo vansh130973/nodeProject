@@ -1,10 +1,16 @@
 import Joi from "joi";
+import { TICKET_STATUS, TICKET_MANUAL_STATUS } from "../../../common/constants/status.js";
 
-const TICKET_STATUSES = ["open", "adminReply", "userReply", "closed"];
+const TICKET_STATUSES = [
+  TICKET_STATUS.OPEN,
+  TICKET_STATUS.ADMIN_REPLY,
+  TICKET_STATUS.USER_REPLY,
+  TICKET_STATUS.CLOSED,
+];
 
 // Only these two can be set manually by users / admins.
 // adminReply and userReply are set automatically by the controller on reply.
-const MANUAL_STATUSES = ["open", "closed"];
+const MANUAL_STATUSES = TICKET_MANUAL_STATUS;
 
 export const createTicketSchema = Joi.object({
   subject:     Joi.string().trim().min(1).max(255).required(),

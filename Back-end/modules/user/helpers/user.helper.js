@@ -1,12 +1,5 @@
 import transporter from "../../../config/mailer.js";
-
-const SERVER_URL = process.env.SERVER_URL || "http://localhost:3200";
-
-const buildFileUrl = (relativePath) => {
-  if (!relativePath) return null;
-  if (relativePath.startsWith("http")) return relativePath;
-  return `${SERVER_URL}/${relativePath}`;
-};
+import { buildFileUrl } from "../../../common/url/file-url.js";
 
 export const formatUserData = (user) => ({
   id: user.id,

@@ -18,6 +18,9 @@ import AdminDashboard from "./modules/admin/pages/AdminDashboard";
 
 import Unauthorized from "./components/Unauthorized";
 
+const ADMIN_ROLES  = ["ADMIN", "MASTER_ADMIN"];
+const MASTER_ROLES = ["MASTER_ADMIN"];
+
 const Layout = ({ children }) => (
   <>
     <AppNavbar />
@@ -27,6 +30,12 @@ const Layout = ({ children }) => (
 
 const UserRoute = ({ children }) => (
   <ProtectedRoute allowedRoles={["USER"]}>
+    <Layout>{children}</Layout>
+  </ProtectedRoute>
+);
+
+const AdminRoute = ({ children, roles = ADMIN_ROLES }) => (
+  <ProtectedRoute allowedRoles={roles}>
     <Layout>{children}</Layout>
   </ProtectedRoute>
 );
@@ -47,70 +56,34 @@ const App = () => (
       />
 
       <Routes>
-        <Route path="/login" element={<Layout><LoginPage /></Layout>} />
-        <Route path="/register" element={<Layout><RegisterPage /></Layout>} />
-        <Route path="/forgot-password" element={<Layout><ForgotPasswordPage /></Layout>} />
+        {/* Public */}
+        <Route path="/login"            element={<Layout><LoginPage /></Layout>} />
+        <Route path="/register"         element={<Layout><RegisterPage /></Layout>} />
+        <Route path="/forgot-password"  element={<Layout><ForgotPasswordPage /></Layout>} />
+        <Route path="/admin/login"      element={<Layout><AdminLoginPage /></Layout>} />
+        <Route path="/unauthorized"     element={<Layout><Unauthorized /></Layout>} />
 
-        <Route path="/dashboard" element={<UserRoute><UserDashboard /></UserRoute>} />
-        <Route path="/edit-profile" element={<UserRoute><UserDashboard /></UserRoute>} />
-        <Route path="/change-password" element={<UserRoute><UserDashboard /></UserRoute>} />
-        <Route path="/tickets" element={<UserRoute><UserDashboard /></UserRoute>} />
-        <Route path="/tickets/:id" element={<UserRoute><UserDashboard /></UserRoute>} />
-        <Route path="/admin/login" element={<Layout><AdminLoginPage /></Layout>} />
-        <Route path="/admin/dashboard" element={
-          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
-            <Layout><AdminDashboard /></Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/admin/tickets" element={
-          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
-            <Layout><AdminDashboard /></Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/admin/tickets/:id" element={
-          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
-            <Layout><AdminDashboard /></Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/admin/users" element={
-          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
-            <Layout><AdminDashboard /></Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/admin/admins" element={
-          <ProtectedRoute allowedRoles={["MASTER_ADMIN"]}>
-            <Layout><AdminDashboard /></Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/admin/add-admin" element={
-          <ProtectedRoute allowedRoles={["MASTER_ADMIN"]}>
-            <Layout><AdminDashboard /></Layout>
-          </ProtectedRoute>
-        } />
+        {/* User routes */}
+        <Route path="/dashboard"        element={<UserRoute><UserDashboard /></UserRoute>} />
+        <Route path="/edit-profile"     element={<UserRoute><UserDashboard /></UserRoute>} />
+        <Route path="/change-password"  element={<UserRoute><UserDashboard /></UserRoute>} />
+        <Route path="/tickets"          element={<UserRoute><UserDashboard /></UserRoute>} />
+        <Route path="/tickets/:id"      element={<UserRoute><UserDashboard /></UserRoute>} />
 
-        <Route path="/admin/modules" element={
-          <ProtectedRoute allowedRoles={["MASTER_ADMIN"]}>
-            <Layout><AdminDashboard /></Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/admin/roles" element={
-          <ProtectedRoute allowedRoles={["MASTER_ADMIN"]}>
-            <Layout><AdminDashboard /></Layout>
-          </ProtectedRoute>
-        } />
+        {/* Admin routes (ADMIN + MASTER_ADMIN) */}
+        <Route path="/admin/dashboard"       element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/tickets"         element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/tickets/:id"     element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/users"           element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/profile"         element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/change-password" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
 
-                <Route path="/admin/profile" element={
-          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
-            <Layout><AdminDashboard /></Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/admin/change-password" element={
-          <ProtectedRoute allowedRoles={["ADMIN", "MASTER_ADMIN"]}>
-            <Layout><AdminDashboard /></Layout>
-          </ProtectedRoute>
-        } />
+        {/* Master admin only */}
+        <Route path="/admin/admins"     element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/add-admin"  element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/modules"    element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/roles"      element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
 
-        <Route path="/unauthorized" element={<Layout><Unauthorized /></Layout>} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

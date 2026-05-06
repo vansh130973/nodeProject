@@ -45,9 +45,7 @@ export const apiUpdateTicketStatusUser = async (id, status) => {
 };
 
 export const apiAdminListTickets = async ({ page = 1, limit = 10, status = "", search = "" } = {}) => {
-  const q = new URLSearchParams();
-  q.set("page", String(page));
-  q.set("limit", String(limit));
+  const q = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (status && status !== "all") q.set("status", status);
   if (search?.trim()) q.set("search", search.trim());
   const res = await fetch(`${BASE_URL}/admin/tickets?${q}`, { headers: getBearerHeader() });
@@ -80,7 +78,8 @@ export const apiAdminUpdateTicketStatus = async (id, status) => {
   return handleResponse(res);
 };
 
-// Returns count of tickets where status=adminReply (unread for user)
+// NOTE: This fetches all tickets client-side just to count "adminReply" ones.
+// Ideally the backend should expose GET /tickets/unread-count for efficiency.
 export const apiUserGetUnreadCount = async () => {
   const data = await apiGetMyTickets();
   return (data.tickets ?? []).filter((t) => t.status === "adminReply").length;

@@ -25,16 +25,10 @@ import { findRoleById } from "../../role/models/role.model.js";
 
 import { formatAdminData } from "../helpers/admin.helper.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
+import { parseLimit, parsePage, buildPaginationMeta } from "../../../common/http/pagination.js";
 
 /** username "admin" = unrestricted super-admin */
 const isSuperAdmin = (userName) => userName === "admin";
-
-const parseLimit = (value, fallback = 10) => {
-  if (String(value).toLowerCase() === "all") return "all";
-  const parsed = parseInt(value, 10);
-  if (Number.isNaN(parsed)) return fallback;
-  return Math.min(100, Math.max(1, parsed));
-};
 
 const buildPermissionMap = (permissions) =>
   permissions.reduce((acc, p) => {
@@ -175,17 +169,16 @@ export const getMyPermissions = async (req, res) => {
 
 export const showAllUsers = async (req, res) => {
   try {
-    const page   = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit  = parseLimit(req.query.limit, 10);
+    const page = parsePage(req.query.page, 1);
+    const limit = parseLimit(req.query.limit, 10);
     const status = req.query.status || "";
     const search = req.query.search || "";
 
     const { rows: users, total } = await getUsersWithPaginationAndCount(page, limit, status, search);
-    const totalPages = limit === "all" ? 1 : Math.ceil(total / limit);
 
     return sendSuccessResponse(res, "Users fetched successfully", {
       users,
-      pagination: { total, page, limit, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
+      pagination: buildPaginationMeta({ total, page, limit }),
     });
   } catch (error) {
     console.error("showAllUsers error:", error);
@@ -290,16 +283,15 @@ export const showAllAdmins = async (req, res) => {
 
 export const showAdminsWithPagination = async (req, res) => {
   try {
-    const page   = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit  = parseLimit(req.query.limit, 10);
+    const page = parsePage(req.query.page, 1);
+    const limit = parseLimit(req.query.limit, 10);
     const search = req.query.search || "";
 
     const { rows: admins, total } = await getAdminsWithPaginationAndCount(page, limit, search);
-    const totalPages = limit === "all" ? 1 : Math.ceil(total / limit);
 
     return sendSuccessResponse(res, "Admins fetched successfully", {
       admins,
-      pagination: { total, page, limit, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
+      pagination: buildPaginationMeta({ total, page, limit }),
     });
   } catch (error) {
     console.error("showAdminsWithPagination error:", error);

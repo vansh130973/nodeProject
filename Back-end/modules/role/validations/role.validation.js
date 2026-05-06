@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { RECORD_STATUS } from "../../../common/constants/status.js";
 
 const permissionRow = Joi.object({
   moduleId:  Joi.number().integer().positive().required(),
@@ -15,7 +16,7 @@ export const createRoleSchema = Joi.object({
     "string.max":   "Role name must not exceed 100 characters",
   }),
   description: Joi.string().max(255).allow("", null).optional(),
-  status: Joi.string().valid("active", "inactive").default("active").messages({
+  status: Joi.string().valid(RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE).default(RECORD_STATUS.ACTIVE).messages({
     "any.only": "Status must be active or inactive",
   }),
   permissions: Joi.array().items(permissionRow).default([]),
@@ -28,7 +29,7 @@ export const updateRoleSchema = Joi.object({
     "string.max":   "Role name must not exceed 100 characters",
   }),
   description: Joi.string().max(255).allow("", null).optional(),
-  status: Joi.string().valid("active", "inactive").required().messages({
+  status: Joi.string().valid(RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE).required().messages({
     "string.empty": "Status is required",
     "any.only":     "Status must be active or inactive",
   }),

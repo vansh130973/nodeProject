@@ -1,13 +1,11 @@
 import transporter from "../../../config/mailer.js";
+import { buildFileUrl } from "../../../common/url/file-url.js";
 
-const SERVER_URL = process.env.SERVER_URL || "http://localhost:3200";
+export { buildFileUrl };
 
-export const buildFileUrl = (relativePath) => {
-  if (!relativePath) return null;
-  if (String(relativePath).startsWith("http")) return relativePath;
-  return `${SERVER_URL}/${relativePath}`;
-};
-
+/**
+ * Notify support mailbox when a user opens a new ticket.
+ */
 export const notifySupportNewTicket = async ({ userEmail, userName, ticketId, subject }) => {
   const to = process.env.TICKET_NOTIFY_EMAIL || process.env.MAIL_USER;
   if (!to) return;
@@ -25,6 +23,9 @@ export const notifySupportNewTicket = async ({ userEmail, userName, ticketId, su
   });
 };
 
+/**
+ * Notify user that ticket creation was successful.
+ */
 export const notifyUserTicketCreated = async ({ toEmail, ticketId, subject }) => {
   if (!toEmail) return;
   await transporter.sendMail({
@@ -40,6 +41,9 @@ export const notifyUserTicketCreated = async ({ toEmail, ticketId, subject }) =>
   });
 };
 
+/**
+ * Notify the opposite side about a new reply on the ticket thread.
+ */
 export const notifyTicketMessage = async ({ toEmail, subject, preview, ticketId, fromLabel }) => {
   if (!toEmail) return;
   const safePreview = escapeHtml((preview || "").slice(0, 500));
@@ -57,6 +61,9 @@ export const notifyTicketMessage = async ({ toEmail, subject, preview, ticketId,
   });
 };
 
+/**
+ * Minimal HTML escaping to safely render user text inside emails.
+ */
 function escapeHtml(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")

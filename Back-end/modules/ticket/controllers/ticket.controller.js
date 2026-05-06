@@ -23,17 +23,36 @@ import {
 } from "../helpers/ticket.helper.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
 
-const formatTicketRow = (row) => ({
-  ...row,
-  file: buildFileUrl(row.file),
-});
+/**
+ * Convert DB ticket row into API response shape.
+ * Ensures file path is always returned as a public URL.
+ * @param {Object|null} ticket
+ * @returns {Object|null}
+ */
+const formatTicketRow = (ticket) => {
+  if (!ticket) return null;
+  return {
+    ...ticket,
+    file: buildFileUrl(ticket.file),
+  };
+};
 
+/**
+ * Convert each message file path into public URL for clients.
+ * @param {Array<Object>} messages
+ * @returns {Array<Object>}
+ */
 const formatMessages = (messages) =>
   messages.map((m) => ({
     ...m,
     file: buildFileUrl(m.file),
   }));
 
+/**
+ * Fire-and-forget style notifier wrapper.
+ * Notification failures should never block the main API operation.
+ * @param {Function} fn
+ */
 const safeNotify = async (fn) => {
   try {
     await fn();
@@ -42,35 +61,66 @@ const safeNotify = async (fn) => {
   }
 };
 
+/**
+ * Normalize message payload from request body/file.
+ * @param {Object} req
+ * @returns {{ text: string, isValid: boolean }}
+ */
+const getNormalizedMessageText = (req) => {
+  let text = (req.body.message ?? "").trim();
+  if (!text && req.file) text = "(attachment)";
+  return { text, isValid: Boolean(text || req.file) };
+};
+
+/**
+ * Build owner object for admin ticket response payload.
+ * @param {Object} ticket
+ * @returns {Object}
+ */
+const buildTicketOwner = (ticket) => ({
+  email: ticket.ownerEmail,
+  userName: ticket.userName,
+  firstName: ticket.firstName,
+  lastName: ticket.lastName,
+});
+
 export const createTicket = async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const user = req.user;
+    const userId = user.id;
     const { subject, description } = req.body;
 
-    const ticketId = await insertTicket(userId, subject, description ?? "", "open", null);
+    let fullTicketFilePath = null;
 
-    let filePath = null;
+    const ticketId = await insertTicket(userId, subject, description);
+    
     if (req.file) {
-      filePath = await moveTicketAttachment(req.file, ticketId);
+      const filePath = await moveTicketAttachment(req.file, ticketId);
       await updateTicketFile(ticketId, filePath);
+      fullTicketFilePath = buildFileUrl(filePath);
     }
 
-    const ticket = await findTicketById(ticketId);
-    const owner = await findUserById(userId);
+    const ticket = {
+      ticketId,
+      userId,
+      subject,
+      description,
+      file: fullTicketFilePath,
+    };
 
     await safeNotify(() =>
       notifyUserTicketCreated({
-        toEmail: owner?.email,
+        toEmail: user.email,
         ticketId,
-        subject: ticket.subject,
+        subject,
       })
     );
     await safeNotify(() =>
       notifySupportNewTicket({
-        userEmail: owner?.email,
-        userName: owner?.userName ?? "",
+        userEmail: user.email,
+        userName: user.userName,
         ticketId,
-        subject: ticket.subject,
+        subject,
       })
     );
 
@@ -123,11 +173,10 @@ export const addMessageUser = async (req, res) => {
     const ticket = await findTicketForUser(ticketId, req.user.id);
     if (!ticket) return sendErrorResponse(res, "Ticket not found", 404);
 
-    let text = (req.body.message ?? "").trim();
-    if (!text && !req.file) {
+    const { text, isValid } = getNormalizedMessageText(req);
+    if (!isValid) {
       return sendErrorResponse(res, "Message or attachment is required", 400);
     }
-    if (!text && req.file) text = "(attachment)";
 
     let filePath = null;
     if (req.file) {
@@ -209,12 +258,7 @@ export const getTicketDetailAdmin = async (req, res) => {
     return sendSuccessResponse(res, "Ticket loaded", {
       ticket: {
         ...formatTicketRow(rest),
-        owner: {
-          email: ownerEmail,
-          userName: ticket.userName,
-          firstName: ticket.firstName,
-          lastName: ticket.lastName,
-        },
+        owner: buildTicketOwner({ ...ticket, ownerEmail }),
       },
       messages: formatMessages(messages),
     });
@@ -230,11 +274,10 @@ export const addMessageAdmin = async (req, res) => {
     const ticket = await findTicketWithOwner(ticketId);
     if (!ticket) return sendErrorResponse(res, "Ticket not found", 404);
 
-    let text = (req.body.message ?? "").trim();
-    if (!text && !req.file) {
+    const { text, isValid } = getNormalizedMessageText(req);
+    if (!isValid) {
       return sendErrorResponse(res, "Message or attachment is required", 400);
     }
-    if (!text && req.file) text = "(attachment)";
 
     let filePath = null;
     if (req.file) {
@@ -302,12 +345,7 @@ export const patchTicketStatusAdmin = async (req, res) => {
     return sendSuccessResponse(res, "Status updated", {
       ticket: {
         ...formatTicketRow(rest),
-        owner: {
-          email: ownerEmail,
-          userName: updated.userName,
-          firstName: updated.firstName,
-          lastName: updated.lastName,
-        },
+        owner: buildTicketOwner({ ...updated, ownerEmail }),
       },
     });
   } catch (error) {

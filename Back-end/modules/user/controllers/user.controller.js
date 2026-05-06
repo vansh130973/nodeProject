@@ -54,7 +54,6 @@ export const registerUser = async (req, res) => {
       res,
       "Registration successful. Your account is pending admin approval before you can log in.",
       { data: formatUserData(newUser) },
-      undefined,
       201
     );
   } catch (error) {

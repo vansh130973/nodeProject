@@ -1,4 +1,4 @@
-import { BASE_URL, getAuthHeaders, handleResponse } from "../../../utils/api";
+import { BASE_URL, getAuthHeaders, getBearerHeader, handleResponse } from "../../../utils/api";
 
 export const apiLoginAdmin = (body) =>
   fetch(`${BASE_URL}/admin/login`, {
@@ -104,7 +104,7 @@ export const apiDeleteAdmin = (id) =>
 export const apiEditAdminProfile = (formData) =>
   fetch(`${BASE_URL}/admin/profile`, {
     method: "PUT",
-    headers: { Authorization: getAuthHeaders().Authorization },
+    headers: getBearerHeader(),
     body: formData,
   }).then(handleResponse);
 

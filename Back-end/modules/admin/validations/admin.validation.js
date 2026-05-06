@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { RECORD_STATUS } from "../../../common/constants/status.js";
 
 const PASSWORD_PATTERN = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
 const PASSWORD_MSG = "Password must be 8+ characters and include an uppercase letter, a number, and a special character (@$!%*?&)";
@@ -38,7 +39,10 @@ export const loginAdminSchema = Joi.object({
 });
 
 export const updateUserStatusSchema = Joi.object({
-  status: Joi.string().valid("active", "pending", "inactive").required().messages({
+  status: Joi.string()
+    .valid(RECORD_STATUS.ACTIVE, RECORD_STATUS.PENDING, RECORD_STATUS.INACTIVE)
+    .required()
+    .messages({
     "any.only":     "Status must be one of: active, pending, inactive",
     "string.empty": "Status is required",
   }),
