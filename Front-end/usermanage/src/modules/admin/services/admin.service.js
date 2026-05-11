@@ -61,6 +61,11 @@ export const apiDeleteUser = (id) =>
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
+export const apiForceLogoutUser = (id) =>
+  fetch(`${BASE_URL}/admin/users/${id}/logout`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
 
 // ─── Admins ───────────────────────────────────────────────────────────────────
 

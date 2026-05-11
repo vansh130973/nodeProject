@@ -22,7 +22,7 @@ import {
   sendOtpEmail,
 } from "../helpers/user.helper.js";
 import { moveToUserFolder } from "../../../middlewares/upload.js";
-import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
+import { sendSuccessResponse, sendErrorResponse } from "../../../common/http/response.js";
 
 // ─── Register ─────────────────────────────────────────────────────────────────
 

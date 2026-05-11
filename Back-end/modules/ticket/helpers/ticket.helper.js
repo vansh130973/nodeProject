@@ -1,7 +1,4 @@
 import transporter from "../../../config/mailer.js";
-import { buildFileUrl } from "../../../common/url/file-url.js";
-
-export { buildFileUrl };
 
 /**
  * Notify support mailbox when a user opens a new ticket.

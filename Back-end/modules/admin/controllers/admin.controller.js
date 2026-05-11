@@ -24,8 +24,14 @@ import {
 import { findRoleById } from "../../role/models/role.model.js";
 
 import { formatAdminData } from "../helpers/admin.helper.js";
-import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
+import { sendSuccessResponse, sendErrorResponse } from "../../../common/http/response.js";
 import { parseLimit, parsePage, buildPaginationMeta } from "../../../common/http/pagination.js";
+import {
+  emitUserStatusChanged,
+  emitForceLogoutUser,
+  emitForceLogoutAdmin,
+  emitAdminStatusChanged,
+} from "../../../socket/socketManager.js";
 
 /** username "admin" = unrestricted super-admin */
 const isSuperAdmin = (userName) => userName === "admin";
@@ -211,7 +217,11 @@ export const changeUserStatus = async (req, res) => {
     if (user.status === "deleted") return sendErrorResponse(res, "Cannot update deleted user", 400);
 
     await updateUserStatus(id, status);
-    if (status !== "active") await forceLogoutUser(id);
+    if (status !== "active") {
+      await forceLogoutUser(id);
+      emitForceLogoutUser(Number(id));  // real-time forced logout
+    }
+    emitUserStatusChanged(Number(id), status); // real-time status badge update
 
     return sendSuccessResponse(res, `User status updated to '${status}'`);
   } catch (error) {
@@ -240,6 +250,7 @@ export const logoutUserByAdmin = async (req, res) => {
     const user = await findUserByIdAdmin(id);
     if (!user) return sendErrorResponse(res, "User not found", 404);
     await forceLogoutUser(id);
+    emitForceLogoutUser(Number(id));
     return sendSuccessResponse(res, "User logged out successfully");
   } catch (err) {
     console.log("logoutUserByAdmin error:", err);
@@ -339,6 +350,7 @@ export const editAdmin = async (req, res) => {
 
     const updated = await updateAdminByMaster(id, { userName, email, phone, password: hashedPassword, roleId });
     await deleteAllAdminTokens(id);
+    emitForceLogoutAdmin(Number(id)); // real-time: kick the edited admin out to re-login
 
     return sendSuccessResponse(res, "Admin updated successfully", { admin: formatAdminData(updated) });
   } catch (error) {
@@ -357,6 +369,7 @@ export const deleteAdmin = async (req, res) => {
     if (admin.status === "deleted") return sendErrorResponse(res, "Already deleted", 400);
 
     await softDeleteAdmin(id);
+    emitForceLogoutAdmin(Number(id)); // real-time: kick deleted admin immediately
     return sendSuccessResponse(res, "Admin deleted successfully");
   } catch (error) {
     console.error("deleteAdmin error:", error);

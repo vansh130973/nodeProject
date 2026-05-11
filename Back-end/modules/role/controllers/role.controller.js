@@ -8,7 +8,7 @@ import {
   getPermissionsByRoleId,
   upsertPermissions,
 } from "../models/role.model.js";
-import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
+import { sendSuccessResponse, sendErrorResponse } from "../../../common/http/response.js";
 import { deleteTokensByRoleId } from "../../admin/models/admin.model.js";
 
 export const listRoles = async (req, res) => {

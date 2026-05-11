@@ -1,4 +1,4 @@
-import { sendErrorResponse } from '../utils/response.js';
+import { sendErrorResponse } from '../common/http/response.js';
 
 export const validate = (schema) => (req, res, next) => {
   const { error } = schema.validate(req.body, { abortEarly: false });

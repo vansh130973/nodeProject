@@ -3,6 +3,10 @@ import { parseLimit } from "../../../common/http/pagination.js";
 
 /**
  * Create a ticket and return its generated id.
+ * @param {number} userId 
+ * @param {string} subject 
+ * @param {text} description 
+ * @returns {Promise<number>} Inserted ticket id
  */
 export const insertTicket = async (userId, subject, description) => {
   const [result] = await db.query(
@@ -16,11 +20,20 @@ export const insertTicket = async (userId, subject, description) => {
 /**
  * Attach uploaded file path to an existing ticket.
  */
+
+/**
+ * 
+ * @param {*} ticketId 
+ * @param {*} filePath 
+ * @return {Promise<boolean>} Always true if no error, no need to check result
+ */
 export const updateTicketFile = async (ticketId, filePath) => {
   await db.query(
     "UPDATE tickets SET file = ?, updatedAt = NOW() WHERE id = ?",
     [filePath, ticketId]
   );
+
+  return true;
 };
 
 /**

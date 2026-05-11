@@ -6,7 +6,7 @@ import {
   updateModule,
   deleteModule,
 } from "../models/module.model.js";
-import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
+import { sendSuccessResponse, sendErrorResponse } from "../../../common/http/response.js";
 
 export const listModules = async (req, res) => {
   try {

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
+import { useSocket } from "../../../context/SocketContext";
 import {
   apiAddAdmin,
   apiGetAllAdmins,
@@ -15,6 +16,7 @@ import {
   apiGetAdminPermissions,
   apiEditAdminProfile,
   apiChangeAdminPassword,
+  apiForceLogoutUser,
 } from "../services/admin.service";
 import {
   apiGetAllModules,
@@ -1329,6 +1331,7 @@ const AdminDashboard = () => {
   const { user } = useAuth();
   const navigate  = useNavigate();
   const { pathname } = useLocation();
+  const socket = useSocket();
   const {
     users, setUsers,
     pagination, fetchUsers,
@@ -1394,6 +1397,36 @@ const AdminDashboard = () => {
   const [sidebarOpen,     setSidebarOpen]     = useState(true);
   const [unreadCount,     setUnreadCount]     = useState(0);
   const [seenTicketIds,   setSeenTicketIds]   = useState(new Set());
+
+  // ── Socket listeners ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!socket) return;
+
+    // A user replied to a ticket → bump unread badge for admins
+    const onUserReply = ({ ticketId, subject, userName }) => {
+      setSeenTicketIds((prev) => {
+        if (prev.has(ticketId)) return prev;
+        setUnreadCount((c) => c + 1);
+        return prev;
+      });
+      toast.info(`New reply from ${userName} on ticket: "${subject}"`, { autoClose: 5000 });
+    };
+
+    // User status changed by another admin (live refresh users list if visible)
+    const onUserStatus = ({ userId, status }) => {
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, status } : u))
+      );
+    };
+
+    socket.on("ticket:userReply",    onUserReply);
+    socket.on("user:statusChanged",  onUserStatus);
+
+    return () => {
+      socket.off("ticket:userReply",   onUserReply);
+      socket.off("user:statusChanged", onUserStatus);
+    };
+  }, [socket, setUsers]);
 
   // unreadCount is now returned by apiAdminListTickets — updated via onUnreadChange from AdminTicketsSection
   const [adminForm,       setAdminForm]       = useState(INITIAL_ADMIN_FORM);
@@ -1491,6 +1524,20 @@ const AdminDashboard = () => {
       },
     });
   }, [setUsers, fetchDashboard]);
+
+  const handleForceLogoutUser = useCallback((userId, userName) => {
+    setConfirmModal({
+      show: true, title: "Force Logout", danger: true,
+      message: `Force logout "${userName}"? Their active session will be terminated immediately via socket.`,
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await apiForceLogoutUser(userId);
+          toast.success(`"${userName}" has been force logged out`);
+        } catch (err) { showApiError(err, (m) => toast.error(m)); }
+      },
+    });
+  }, []);
 
   // ─── Add Admin form ─────────────────────────────────────────────────────────
   const handleAdminFormChange = (e) => {
@@ -1599,36 +1646,65 @@ const AdminDashboard = () => {
   ];
 
   const Sidebar = () => (
-    <div className="d-flex flex-column bg-dark text-white"
-      style={{ width: sidebarOpen ? 240 : 64, minHeight: "calc(100vh - 56px)", transition: "width 0.25s ease", flexShrink: 0 }}>
-      <button className="btn btn-sm btn-outline-secondary m-2 align-self-end"
-        onClick={() => setSidebarOpen((p) => !p)}>
-        <i className={`bi ${sidebarOpen ? "bi-chevron-left" : "bi-chevron-right"}`} />
-      </button>
+    <div
+      className="d-flex flex-column bg-dark text-white"
+      style={{
+        width: sidebarOpen ? 240 : 64,
+        minHeight: "calc(100vh - 56px)",
+        transition: "width 0.25s ease",
+        flexShrink: 0,
+        overflow: "hidden",
+      }}
+    >
+      {/* Toggle Button */}
+      <div className="d-flex justify-content-end p-2">
+        <button
+          className="btn btn-dark border border-secondary"
+          onClick={() => setSidebarOpen((p) => !p)}
+          style={{
+            width: 34,
+            height: 34,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 8,
+          }}
+        >
+          <i className={`bi ${sidebarOpen ? "bi-chevron-left" : "bi-chevron-right"}`} />
+        </button>
+      </div>
+
       <nav className="flex-grow-1 py-2">
-        {NAV_ITEMS
-          .filter(({ roles, moduleKey, action }) => roles.includes(user?.role) && canAccess(moduleKey, action))
-          .map(({ label, path, tab, icon }) => {
-            const navActive =
-              tab === "tickets"
-                ? activeTab === "tickets" || activeTab === "ticketDetail"
-                : activeTab === tab;
-            const showBadge = tab === "tickets" && unreadCount > 0;
-            return (
-            <button key={tab} onClick={() => navigate(path)}
+        {NAV_ITEMS.filter(
+          ({ roles, moduleKey, action }) =>
+            roles.includes(user?.role) && canAccess(moduleKey, action),
+        ).map(({ label, path, tab, icon }) => {
+          const navActive =
+            tab === "tickets"
+              ? activeTab === "tickets" || activeTab === "ticketDetail"
+              : activeTab === tab;
+
+          const showBadge = tab === "tickets" && unreadCount > 0;
+
+          return (
+            <button
+              key={tab}
+              onClick={() => navigate(path)}
+              title={!sidebarOpen ? label : ""}
               className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-                ${navActive ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
-              title={!sidebarOpen ? label : ""}>
+                  ${ navActive ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50" }`}
+              style={{
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+              }} >
               <i className={`bi ${icon} fs-5 flex-shrink-0`} />
-              {sidebarOpen && <span className="small flex-grow-1">{label}</span>}
-              {showBadge && (
-                <span className="badge rounded-pill bg-danger" style={{ fontSize: 11 }}>
-                  {unreadCount}
-                </span>
-              )}
+
+              {sidebarOpen && ( <span className="small flex-grow-1">{label}</span> )}
+
+              {showBadge && ( <span className="badge rounded-pill bg-danger" style={{ fontSize: 11 }}>{unreadCount}</span> )}
             </button>
-            );
-          })}
+          );
+        })}
       </nav>
     </div>
   );
@@ -1796,6 +1872,15 @@ const AdminDashboard = () => {
                                     )}
                                     {u.status !== "deleted" && (
                                       <>
+                                        {canAccess("users", "canEdit") && (
+                                          <button
+                                            className="btn btn-sm btn-outline-warning"
+                                            title="Force logout user"
+                                            onClick={() => handleForceLogoutUser(u.id, u.userName)}
+                                          >
+                                            <i className="bi bi-box-arrow-right" />
+                                          </button>
+                                        )}
                                         {canAccess("users", "canDelete") && (
                                           <button className="btn btn-sm btn-outline-danger" title="Delete user"
                                             onClick={() => handleDeleteUser(u.id, u.userName)}>

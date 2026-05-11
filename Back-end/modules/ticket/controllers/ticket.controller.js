@@ -2,6 +2,11 @@ import { moveTicketAttachment } from "../../../middlewares/upload.js";
 import { findUserById } from "../../user/models/user.model.js";
 import { findAdminById } from "../../admin/models/admin.model.js";
 import {
+  emitNewMessageBadge,
+  emitAdminNewReply,
+  emitTicketStatusChanged,
+} from "../../../socket/socketManager.js";
+import {
   insertTicket,
   updateTicketFile,
   findTicketById,
@@ -16,12 +21,12 @@ import {
   getUnreadCount,
 } from "../models/ticket.model.js";
 import {
-  buildFileUrl,
   notifySupportNewTicket,
   notifyUserTicketCreated,
   notifyTicketMessage,
 } from "../helpers/ticket.helper.js";
-import { sendSuccessResponse, sendErrorResponse } from "../../../utils/response.js";
+import { buildFileUrl } from "../../../common/url/file-url.js";
+import { sendSuccessResponse, sendErrorResponse } from "../../../common/http/response.js";
 
 /**
  * Convert DB ticket row into API response shape.
@@ -202,6 +207,13 @@ export const addMessageUser = async (req, res) => {
       })
     );
 
+    // Real-time: notify all connected admins of the new user reply
+    safeNotify(() => emitAdminNewReply({
+      ticketId,
+      subject: ticket.subject,
+      userName: owner?.userName ?? req.user.id,
+    }));
+
     const messages = await getTicketMessages(ticketId);
     return sendSuccessResponse(res, "Message sent", { messages: formatMessages(messages) });
   } catch (error) {
@@ -303,6 +315,12 @@ export const addMessageAdmin = async (req, res) => {
       })
     );
 
+    // Real-time: notify the ticket owner of the new admin reply (badge + preview)
+    safeNotify(() => emitNewMessageBadge(ticket.userId, {
+      ticketId,
+      subject: ticket.subject,
+    }));
+
     const messages = await getTicketMessages(ticketId);
     return sendSuccessResponse(res, "Message sent", { messages: formatMessages(messages) });
   } catch (error) {
@@ -338,6 +356,9 @@ export const patchTicketStatusAdmin = async (req, res) => {
 
     const { status } = req.body;
     await updateTicketStatus(ticketId, status);
+
+    // Real-time: notify the ticket owner that their ticket status changed
+    safeNotify(() => emitTicketStatusChanged(ticket.userId, ticketId, status));
 
     const updated = await findTicketWithOwner(ticketId);
     const { ownerEmail, ...rest } = updated;

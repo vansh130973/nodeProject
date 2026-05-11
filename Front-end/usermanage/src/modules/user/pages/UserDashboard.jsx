@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
+import { useSocket } from "../../../context/SocketContext";
 import {
   apiUpdateUserProfile,
   apiChangePassword,
@@ -15,13 +16,13 @@ import UserTicketsSection from "../../ticket/components/UserTicketsSection";
 import UserTicketDetailSection from "../../ticket/components/UserTicketDetailSection";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
-
-
 const UserDashboard = () => {
   const { logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { profile, setProfile, guardedCall } = useUserProfile();
+  const socket = useSocket();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const getActiveTab = () => {
     if (pathname === "/dashboard")       return "profile";
@@ -35,6 +36,34 @@ const UserDashboard = () => {
 
   const [unreadCount,    setUnreadCount]    = useState(0);
   const [seenTicketIds,  setSeenTicketIds]  = useState(new Set());
+
+  // ── Socket listeners ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!socket) return;
+
+    // Admin replied to one of our tickets → increment badge
+    const onNewMessage = ({ ticketId, subject }) => {
+      setSeenTicketIds((prev) => {
+        if (prev.has(ticketId)) return prev; // already seen, no bump
+        setUnreadCount((c) => c + 1);
+        return prev;
+      });
+      toast.info(`New reply on ticket: "${subject}"`, { autoClose: 5000 });
+    };
+
+    // Admin changed our ticket status (e.g. closed)
+    const onTicketStatus = ({ ticketId, status }) => {
+      toast.info(`Ticket #${ticketId} status changed to "${status}"`);
+    };
+
+    socket.on("ticket:newMessage",   onNewMessage);
+    socket.on("ticket:statusChanged", onTicketStatus);
+
+    return () => {
+      socket.off("ticket:newMessage",   onNewMessage);
+      socket.off("ticket:statusChanged", onTicketStatus);
+    };
+  }, [socket]);
 
   // unreadCount is derived from the ticket list in handleTicketsLoaded when user visits Tickets tab
 
@@ -149,26 +178,72 @@ const UserDashboard = () => {
   const imgSrc = preview ?? profile?.profilePicture ?? null;
 
   const Sidebar = () => (
-    <div className="d-flex flex-column bg-dark text-white"
-      style={{ width: 240, minHeight: "calc(100vh - 56px)", flexShrink: 0 }}>
+    <div
+      className="d-flex flex-column bg-dark text-white"
+      style={{
+        width: sidebarOpen ? 240 : 64,
+        minHeight: "calc(100vh - 56px)",
+        transition: "width 0.25s ease",
+        flexShrink: 0,
+        overflow: "hidden",
+      }}
+    >
+      <div className="d-flex justify-content-end p-2">
+        <button
+          className="btn btn-dark border border-secondary"
+          onClick={() => setSidebarOpen((p) => !p)}
+          style={{
+            width: 34,
+            height: 34,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 8,
+          }}
+        >
+          <i className={`bi ${sidebarOpen ? "bi-chevron-left" : "bi-chevron-right"}`} />
+        </button>
+      </div>
       <nav className="flex-grow-1 py-2">
         {[
-          { label: "Profile",         path: "/dashboard",       tab: "profile",  icon: "bi-person-circle" },
-          // { label: "Edit Profile",    path: "/edit-profile",    tab: "edit",     icon: "bi-pencil-square" },
-          // { label: "Change Password", path: "/change-password", tab: "password", icon: "bi-shield-lock"   },
-          { label: "My Tickets", path: "/tickets", tab: "tickets", icon: "bi-ticket-perforated" },
+          {
+            label: "Profile",
+            path: "/dashboard",
+            tab: "profile",
+            icon: "bi-person-circle",
+          },
+          {
+            label: "My Tickets",
+            path: "/tickets",
+            tab: "tickets",
+            icon: "bi-ticket-perforated",
+          },
         ].map(({ label, path, tab, icon }) => {
-          const isTicketTab = tab === "tickets" && (activeTab === "tickets" || activeTab === "ticketDetail");
+          const isTicketTab =
+            tab === "tickets" &&
+            (activeTab === "tickets" || activeTab === "ticketDetail");
           const isActive = tab === "tickets" ? isTicketTab : activeTab === tab;
           const showBadge = tab === "tickets" && unreadCount > 0;
           return (
-            <button key={tab} onClick={() => navigate(path)}
+            <button
+              key={tab}
+              onClick={() => navigate(path)}
+              title={!sidebarOpen ? label : ""}
               className={`d-flex align-items-center gap-3 w-100 border-0 px-3 py-3 text-start
-                ${isActive ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}>
+                ${isActive ? "bg-warning text-black fw-semibold" : "bg-transparent text-white-50"}`}
+              style={{ whiteSpace: "nowrap", overflow: "hidden" }}
+            >
               <i className={`bi ${icon} fs-5 flex-shrink-0`} />
-              <span className="small flex-grow-1">{label}</span>
+
+              {sidebarOpen && (
+                <span className="small flex-grow-1">{label}</span>
+              )}
+
               {showBadge && (
-                <span className="badge rounded-pill bg-danger" style={{ fontSize: 11 }}>
+                <span
+                  className="badge rounded-pill bg-danger"
+                  style={{ fontSize: 11 }}
+                >
                   {unreadCount}
                 </span>
               )}
