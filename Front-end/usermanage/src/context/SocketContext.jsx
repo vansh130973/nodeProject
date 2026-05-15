@@ -13,7 +13,7 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    // Only connect when a user is logged in
+    // ── Disconnect when no user / no token ────────────────────────────────────
     if (!user || !token) {
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -23,9 +23,10 @@ export const SocketProvider = ({ children }) => {
       return;
     }
 
-    // Avoid duplicate connections on re-renders
+    // ── Avoid duplicate connections on re-renders ─────────────────────────────
     if (socketRef.current?.connected) return;
 
+    // ── Connect ───────────────────────────────────────────────────────────────
     const s = io(BASE_URL, {
       auth: { token },
       reconnection: true,
@@ -36,14 +37,44 @@ export const SocketProvider = ({ children }) => {
     socketRef.current = s;
     setSocket(s);
 
+    // ── Connection lifecycle handlers ─────────────────────────────────────────
+    s.on("connect", () => {
+      // Socket successfully connected / reconnected — nothing extra needed.
+    });
+
+    s.on("disconnect", (reason) => {
+      // If the server disconnected us (e.g. token revoked), don't auto-reconnect.
+      if (reason === "io server disconnect") {
+        s.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+      }
+    });
+
+    s.on("connect_error", (err) => {
+      // Auth failures (token revoked / expired) surface here.
+      if (err?.message === "Token revoked" || err?.message === "Unauthorized") {
+        s.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+      }
+    });
+
     // ── Global forced-logout handler ──────────────────────────────────────────
     // Fires when: admin deactivates/deletes user, master admin edits/deletes admin
     s.on("auth:forceLogout", () => {
       s.disconnect();
+      socketRef.current = null;
+      setSocket(null);
       logout();
     });
 
+    // ── Cleanup on identity change / unmount ──────────────────────────────────
     return () => {
+      s.off("connect");
+      s.off("disconnect");
+      s.off("connect_error");
+      s.off("auth:forceLogout");
       s.disconnect();
       socketRef.current = null;
       setSocket(null);

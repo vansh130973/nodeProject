@@ -119,3 +119,16 @@ export const apiChangeAdminPassword = (body) =>
     headers: getAuthHeaders(),
     body: JSON.stringify(body),
   }).then(handleResponse);
+// ─── Notifications (MASTER_ADMIN only) ───────────────────────────────────────
+
+export const apiSendBroadcastNotification = (body) =>
+  fetch(`${BASE_URL}/admin/notifications/broadcast`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(body),
+  }).then(handleResponse);
+
+export const apiGetAdminNotifications = (page = 1, limit = 5) =>
+  fetch(`${BASE_URL}/admin/notifications?page=${page}&limit=${limit}`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);

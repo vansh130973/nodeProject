@@ -1,6 +1,13 @@
 import db from "../../../config/db.js";
 
-// Registration: allow if username doesn't exist OR only exists as deleted
+/**
+ * Find non-deleted users matching email or username.
+ * Used during registration to detect duplicates.
+ *
+ * @param {string} email
+ * @param {string} userName
+ * @returns {Promise<object[]>}
+ */
 export const findActiveUserByEmailOrUsername = async (email, userName) => {
   try {
     const [result] = await db.query(
@@ -14,6 +21,12 @@ export const findActiveUserByEmailOrUsername = async (email, userName) => {
   }
 };
 
+/**
+ * Find a non-deleted user by username (used for login).
+ *
+ * @param {string} userName
+ * @returns {Promise<object|null>}
+ */
 export const findUserByUsername = async (userName) => {
   try {
     const [result] = await db.query(
@@ -27,6 +40,12 @@ export const findUserByUsername = async (userName) => {
   }
 };
 
+/**
+ * Find a non-deleted user by email (used for OTP / forgot-password flows).
+ *
+ * @param {string} email
+ * @returns {Promise<object|null>}
+ */
 export const findUserByEmail = async (email) => {
   try {
     const [result] = await db.query(
@@ -40,6 +59,12 @@ export const findUserByEmail = async (email) => {
   }
 };
 
+/**
+ * Find a user by id (no isDeleted filter — used internally).
+ *
+ * @param {number} id
+ * @returns {Promise<object|null>}
+ */
 export const findUserById = async (id) => {
   try {
     const [result] = await db.query(
@@ -53,6 +78,19 @@ export const findUserById = async (id) => {
   }
 };
 
+/**
+ * Insert a new user row with pending status.
+ *
+ * @param {string} firstName
+ * @param {string} lastName
+ * @param {string} userName
+ * @param {string} password
+ * @param {string} email
+ * @param {string} phone
+ * @param {string} gender
+ * @param {string|null} profilePicture
+ * @returns {Promise<object>} Partial user object with insertId
+ */
 export const insertUser = async (
   firstName, lastName, userName, password, email, phone, gender, profilePicture
 ) => {
@@ -68,7 +106,13 @@ export const insertUser = async (
   }
 };
 
-// Update only the profilePicture column
+/**
+ * Update only the profilePicture column for a user.
+ *
+ * @param {number} id
+ * @param {string} profilePicture
+ * @returns {Promise<void>}
+ */
 export const updateProfilePicture = async (id, profilePicture) => {
   try {
     await db.query(
@@ -81,6 +125,17 @@ export const updateProfilePicture = async (id, profilePicture) => {
   }
 };
 
+/**
+ * Update a user's editable profile fields and return the refreshed row.
+ *
+ * @param {number} id
+ * @param {string} firstName
+ * @param {string} lastName
+ * @param {string} phone
+ * @param {string} gender
+ * @param {string|null} profilePicture
+ * @returns {Promise<object>} Updated user row
+ */
 export const updateUserProfile = async (id, firstName, lastName, phone, gender, profilePicture) => {
   try {
     await db.query(
@@ -94,6 +149,13 @@ export const updateUserProfile = async (id, firstName, lastName, phone, gender, 
   }
 };
 
+/**
+ * Overwrite a user's password hash.
+ *
+ * @param {number} id
+ * @param {string} hashedPassword
+ * @returns {Promise<void>}
+ */
 export const updateUserPassword = async (id, hashedPassword) => {
   try {
     await db.query(
@@ -106,6 +168,13 @@ export const updateUserPassword = async (id, hashedPassword) => {
   }
 };
 
+/**
+ * Persist a new JWT token for a user session.
+ *
+ * @param {number} userId
+ * @param {string} token
+ * @returns {Promise<void>}
+ */
 export const saveUserToken = async (userId, token) => {
   try {
     await db.query(
@@ -118,6 +187,13 @@ export const saveUserToken = async (userId, token) => {
   }
 };
 
+/**
+ * Look up a token row by its value.
+ * Returns null when the token has been deleted (e.g. after logout).
+ *
+ * @param {string} token
+ * @returns {Promise<object|null>}
+ */
 export const findUserToken = async (token) => {
   try {
     const [result] = await db.query(
@@ -131,6 +207,12 @@ export const findUserToken = async (token) => {
   }
 };
 
+/**
+ * Delete a single token (used on logout).
+ *
+ * @param {string} token
+ * @returns {Promise<void>}
+ */
 export const deleteUserToken = async (token) => {
   try {
     await db.query(
@@ -143,6 +225,12 @@ export const deleteUserToken = async (token) => {
   }
 };
 
+/**
+ * Delete all tokens for a user, forcing re-authentication on all devices.
+ *
+ * @param {number} userId
+ * @returns {Promise<void>}
+ */
 export const deleteAllUserTokens = async (userId) => {
   try {
     await db.query(
@@ -155,6 +243,14 @@ export const deleteAllUserTokens = async (userId) => {
   }
 };
 
+/**
+ * Upsert an OTP for a user (deletes any existing OTP first).
+ *
+ * @param {number} userId
+ * @param {string} otp
+ * @param {Date}   expiresAt
+ * @returns {Promise<void>}
+ */
 export const saveOtp = async (userId, otp, expiresAt) => {
   try {
     await db.query("DELETE FROM userOtp WHERE userId = ?", [userId]);
@@ -168,6 +264,12 @@ export const saveOtp = async (userId, otp, expiresAt) => {
   }
 };
 
+/**
+ * Fetch the active OTP record for a user.
+ *
+ * @param {number} userId
+ * @returns {Promise<object|null>}
+ */
 export const findOtpByUserId = async (userId) => {
   try {
     const [result] = await db.query(
@@ -181,6 +283,12 @@ export const findOtpByUserId = async (userId) => {
   }
 };
 
+/**
+ * Delete all OTP records for a user (called after successful password reset).
+ *
+ * @param {number} userId
+ * @returns {Promise<void>}
+ */
 export const deleteOtp = async (userId) => {
   try {
     await db.query("DELETE FROM userOtp WHERE userId = ?", [userId]);

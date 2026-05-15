@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { apiAdminListTickets } from "../services/ticket.service";
 import { showApiError } from "../../../utils/api";
+import { useSocket } from "../../../context/SocketContext";
 
 const PAGE_OPTS = [5, 10, 25, 50];
 
@@ -33,8 +34,7 @@ const NewReplyBadge = () => (
         color: #fff;
         background: #dc3545;
         vertical-align: middle;
-        margin-right: 7px;
-        animation: nrPopAdmin 0.3s ease-out forwards;
+        margin-left: 7px;
         flex-shrink: 0;
         line-height: 1;
       }
@@ -43,8 +43,10 @@ const NewReplyBadge = () => (
   </>
 );
 
-const AdminTicketsSection = ({ onUnreadChange }) => {
+const AdminTicketsSection = ({ onUnreadChange, seenTicketIds = new Set() }) => {
   const navigate = useNavigate();
+  const socket   = useSocket();
+
   const [tickets,      setTickets]      = useState([]);
   const [pagination,   setPagination]   = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
   const [filterStatus, setFilterStatus] = useState("all");
@@ -53,10 +55,10 @@ const AdminTicketsSection = ({ onUnreadChange }) => {
   const searchDebounce = useRef(null);
 
   const load = async (
-    page      = pagination.page,
-    limitVal  = pagination.limit,
-    st        = filterStatus,
-    q         = searchQuery,
+    page     = pagination.page,
+    limitVal = pagination.limit,
+    st       = filterStatus,
+    q        = searchQuery,
   ) => {
     setLoading(true);
     try {
@@ -65,7 +67,10 @@ const AdminTicketsSection = ({ onUnreadChange }) => {
       setTickets(list);
       if (data.pagination) setPagination(data.pagination);
       if (typeof data.unreadCount === "number") {
-        onUnreadChange?.(data.unreadCount);
+        const seenCount = list.filter(
+          (t) => t.status === "userReply" && seenTicketIds.has(t.id)
+        ).length;
+        onUnreadChange?.(Math.max(0, data.unreadCount - seenCount));
       }
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
@@ -78,6 +83,37 @@ const AdminTicketsSection = ({ onUnreadChange }) => {
     load(1, pagination.limit, filterStatus, searchQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Live socket update: update ticket row instantly on new user reply ──────
+  useEffect(() => {
+    if (!socket) return;
+
+    const onUserReply = ({ ticketId }) => {
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === ticketId ? { ...t, status: "userReply" } : t
+        )
+      );
+    };
+
+    // When admin sends a reply (from another tab/admin), update status to adminReply
+    const onLiveMessage = ({ ticketId, senderType }) => {
+      if (senderType === "admin") {
+        setTickets((prev) =>
+          prev.map((t) =>
+            t.id === ticketId ? { ...t, status: "adminReply" } : t
+          )
+        );
+      }
+    };
+
+    socket.on("ticket:userReply",  onUserReply);
+    socket.on("ticket:liveMessage", onLiveMessage);
+    return () => {
+      socket.off("ticket:userReply",  onUserReply);
+      socket.off("ticket:liveMessage", onLiveMessage);
+    };
+  }, [socket]);
 
   const handleSearchChange = (e) => {
     const val = e.target.value;
@@ -157,8 +193,10 @@ const AdminTicketsSection = ({ onUnreadChange }) => {
                         onClick={() => navigate(`/admin/tickets/${t.id}`)}
                       >
                         <td className="fw-semibold">
-                          {t.subject}&nbsp;
-                          {t.status === "userReply" && <NewReplyBadge />}
+                          <span>{t.subject}</span>
+                          {t.status === "userReply" && !seenTicketIds.has(t.id) && (
+                            <NewReplyBadge />
+                          )}
                         </td>
                         <td className="small">
                           <div>{t.userName}</div>

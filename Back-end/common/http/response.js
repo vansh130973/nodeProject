@@ -1,6 +1,6 @@
 /**
  * Send a standardized successful API response payload.
- * @param {import("express").Response} res
+ * @param {object} res HTTP response
  * @param {string} message
  * @param {Object} [data={}]
  * @param {number} [statusCode=200]
@@ -17,7 +17,7 @@ export const sendSuccessResponse = (res, message, data = {}, statusCode = 200) =
 
 /**
  * Send a standardized failed API response payload.
- * @param {import("express").Response} res
+ * @param {object} res HTTP response
  * @param {string} message
  * @param {number} [statusCode=400]
  * @param {unknown} [devMessage]

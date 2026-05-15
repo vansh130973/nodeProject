@@ -58,3 +58,20 @@ export const apiResetPassword = (body) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   }).then(handleResponse);
+// ─── Notifications ────────────────────────────────────────────────────────────
+export const apiGetNotifications = (page = 1, limit = 5) =>
+  fetch(`${BASE_URL}/notifications?page=${page}&limit=${limit}`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+export const apiReadNotification = (id) =>
+  fetch(`${BASE_URL}/notifications/${id}/read`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+export const apiReadAllNotifications = () =>
+  fetch(`${BASE_URL}/notifications/read-all`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+  }).then(handleResponse);

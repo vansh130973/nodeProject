@@ -71,6 +71,7 @@ const App = () => (
         <Route path="/change-password"  element={<UserRoute><UserDashboard /></UserRoute>} />
         <Route path="/tickets"          element={<UserRoute><UserDashboard /></UserRoute>} />
         <Route path="/tickets/:id"      element={<UserRoute><UserDashboard /></UserRoute>} />
+        <Route path="/notifications"    element={<UserRoute><UserDashboard /></UserRoute>} />
 
         {/* Admin routes (ADMIN + MASTER_ADMIN) */}
         <Route path="/admin/dashboard"       element={<AdminRoute><AdminDashboard /></AdminRoute>} />
@@ -85,6 +86,7 @@ const App = () => (
         <Route path="/admin/add-admin"  element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/modules"    element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/roles"      element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/notifications"  element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

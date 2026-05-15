@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
@@ -7,6 +7,8 @@ import {
   apiUpdateUserProfile,
   apiChangePassword,
   apiLogoutUser,
+  apiGetNotifications,
+  apiReadAllNotifications,
 } from "../services/user.service";
 import { validateEditProfileForm, validateChangePasswordForm } from "../validations/user.validation";
 import { showApiError } from "../../../utils/api";
@@ -30,42 +32,122 @@ const UserDashboard = () => {
     if (pathname === "/change-password") return "password";
     if (pathname.startsWith("/tickets/")) return "ticketDetail";
     if (pathname === "/tickets")         return "tickets";
+    if (pathname === "/notifications")   return "notifications";
     return "profile";
   };
   const activeTab = getActiveTab();
 
   const [unreadCount,    setUnreadCount]    = useState(0);
-  const [seenTicketIds,  setSeenTicketIds]  = useState(new Set());
+  const [seenTicketIds, setSeenTicketIds] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("user_seenTicketIds");
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  });
+
+  const addSeenTicket = (ticketId) => {
+    setSeenTicketIds((prev) => {
+      if (prev.has(ticketId)) return prev;
+      const next = new Set(prev);
+      next.add(ticketId);
+      try { sessionStorage.setItem("user_seenTicketIds", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  };
+
+  const removeSeenTicket = (ticketId) => {
+    setSeenTicketIds((prev) => {
+      if (!prev.has(ticketId)) return prev;
+      const next = new Set(prev);
+      next.delete(ticketId);
+      try { sessionStorage.setItem("user_seenTicketIds", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  };
+
+  // ── Broadcast notifications — loaded from DB, updated live via socket ───────
+  const [broadcastNotifs,   setBroadcastNotifs]   = useState([]);
+  const [unreadNotifCount,  setUnreadNotifCount]  = useState(0);
+  const [notifLoading,      setNotifLoading]      = useState(false);
+  const [markingAllRead,    setMarkingAllRead]     = useState(false);
+  // Pagination state for notifications
+  const [notifPage,         setNotifPage]         = useState(1);
+  const [notifTotalPages,   setNotifTotalPages]   = useState(1);
+  const [notifTotal,        setNotifTotal]        = useState(0);
+
+  // Fetch notifications with pagination
+  const fetchUserNotifications = useCallback(async (page = 1) => {
+    setNotifLoading(true);
+    try {
+      const data = await apiGetNotifications(page);
+      setBroadcastNotifs(data.notifications ?? []);
+      setUnreadNotifCount(data.unreadCount ?? 0);
+      setNotifPage(data.pagination.page);
+      setNotifTotalPages(data.pagination.totalPages);
+      setNotifTotal(data.pagination.total);
+    } catch {
+      // silently ignore
+    } finally {
+      setNotifLoading(false);
+    }
+  }, []);
+
+  // Load notifications on mount
+  useEffect(() => {
+    fetchUserNotifications(1);
+  }, [fetchUserNotifications]);
 
   // ── Socket listeners ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
 
-    // Admin replied to one of our tickets → increment badge
-    const onNewMessage = ({ ticketId, subject }) => {
-      setSeenTicketIds((prev) => {
-        if (prev.has(ticketId)) return prev; // already seen, no bump
+    const onNewMessage = ({ ticketId }) => {
+      const isViewingThisTicket = window.location.pathname === `/tickets/${ticketId}`;
+      removeSeenTicket(ticketId);
+      if (!isViewingThisTicket) {
         setUnreadCount((c) => c + 1);
-        return prev;
-      });
-      toast.info(`New reply on ticket: "${subject}"`, { autoClose: 5000 });
+        toast.info(`Ticket #${ticketId}: new message arrived`, { autoClose: 5000 });
+      }
+      if (isViewingThisTicket) {
+        addSeenTicket(ticketId);
+      }
     };
 
-    // Admin changed our ticket status (e.g. closed)
     const onTicketStatus = ({ ticketId, status }) => {
       toast.info(`Ticket #${ticketId} status changed to "${status}"`);
     };
 
-    socket.on("ticket:newMessage",   onNewMessage);
+    const onBroadcast = ({ id, title, body, sentAt, sentBy }) => {
+      toast.info(
+        <div>
+          <strong>{title}</strong>
+          <div style={{ fontSize: 13, marginTop: 4 }}>{body}</div>
+        </div>,
+        { autoClose: 8000 }
+      );
+      setBroadcastNotifs((prev) => [{ id, title, body, sentAt, sentBy, isRead: 0 }, ...prev].slice(0, 50));
+      setUnreadNotifCount((c) => c + 1);
+    };
+
+    socket.on("ticket:newMessage",    onNewMessage);
     socket.on("ticket:statusChanged", onTicketStatus);
+    socket.on("notification:broadcast", onBroadcast);
 
     return () => {
-      socket.off("ticket:newMessage",   onNewMessage);
+      socket.off("ticket:newMessage",    onNewMessage);
       socket.off("ticket:statusChanged", onTicketStatus);
+      socket.off("notification:broadcast", onBroadcast);
     };
   }, [socket]);
 
-  // unreadCount is derived from the ticket list in handleTicketsLoaded when user visits Tickets tab
+  // Clear notification badge when user opens the Notifications tab
+  useEffect(() => {
+    if (activeTab === "notifications" && unreadNotifCount > 0) {
+      setUnreadNotifCount(0);
+      setBroadcastNotifs((prev) => prev.map((n) => ({ ...n, isRead: 1 })));
+      apiReadAllNotifications().catch(() => {});
+    }
+  }, [activeTab]);
 
   const handleTicketsLoaded = (tickets) => {
     const count = tickets.filter(
@@ -75,11 +157,7 @@ const UserDashboard = () => {
   };
 
   const handleTicketViewed = (ticketId) => {
-    setSeenTicketIds((prev) => {
-      const next = new Set(prev);
-      next.add(ticketId);
-      return next;
-    });
+    addSeenTicket(ticketId);
     setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
@@ -93,7 +171,6 @@ const UserDashboard = () => {
   const [pwErrors, setPwErrors] = useState({});
   const [pwLoading, setPwLoading] = useState(false);
 
-  // Sync editForm once profile loads
   if (profile && !editForm.firstName && profile.firstName) {
     setEditForm({
       firstName: profile.firstName,
@@ -174,7 +251,6 @@ const UserDashboard = () => {
     }
   };
 
-  // profilePicture is now a full URL from the server
   const imgSrc = preview ?? profile?.profilePicture ?? null;
 
   const Sidebar = () => (
@@ -206,24 +282,15 @@ const UserDashboard = () => {
       </div>
       <nav className="flex-grow-1 py-2">
         {[
-          {
-            label: "Profile",
-            path: "/dashboard",
-            tab: "profile",
-            icon: "bi-person-circle",
-          },
-          {
-            label: "My Tickets",
-            path: "/tickets",
-            tab: "tickets",
-            icon: "bi-ticket-perforated",
-          },
+          { label: "Profile", path: "/dashboard", tab: "profile", icon: "bi-person-circle" },
+          { label: "My Tickets", path: "/tickets", tab: "tickets", icon: "bi-ticket-perforated" },
+          { label: "Notifications", path: "/notifications", tab: "notifications", icon: "bi-bell" },
         ].map(({ label, path, tab, icon }) => {
           const isTicketTab =
-            tab === "tickets" &&
-            (activeTab === "tickets" || activeTab === "ticketDetail");
+            tab === "tickets" && (activeTab === "tickets" || activeTab === "ticketDetail");
           const isActive = tab === "tickets" ? isTicketTab : activeTab === tab;
-          const showBadge = tab === "tickets" && unreadCount > 0;
+          const showBadge  = tab === "tickets"      && unreadCount > 0;
+          const showNotifB = tab === "notifications" && unreadNotifCount > 0;
           return (
             <button
               key={tab}
@@ -234,18 +301,12 @@ const UserDashboard = () => {
               style={{ whiteSpace: "nowrap", overflow: "hidden" }}
             >
               <i className={`bi ${icon} fs-5 flex-shrink-0`} />
-
-              {sidebarOpen && (
-                <span className="small flex-grow-1">{label}</span>
-              )}
-
+              {sidebarOpen && <span className="small flex-grow-1">{label}</span>}
               {showBadge && (
-                <span
-                  className="badge rounded-pill bg-danger"
-                  style={{ fontSize: 11 }}
-                >
-                  {unreadCount}
-                </span>
+                <span className="badge rounded-pill bg-danger" style={{ fontSize: 11 }}>{unreadCount}</span>
+              )}
+              {showNotifB && (
+                <span className="badge rounded-pill bg-warning text-dark" style={{ fontSize: 11 }}>{unreadNotifCount}</span>
               )}
             </button>
           );
@@ -369,7 +430,7 @@ const UserDashboard = () => {
         );
 
       case "tickets":
-        return <UserTicketsSection onTicketsLoaded={handleTicketsLoaded} />;
+        return <UserTicketsSection onTicketsLoaded={handleTicketsLoaded} seenTicketIds={seenTicketIds} />;
 
       case "ticketDetail":
         return <UserTicketDetailSection onTicketViewed={handleTicketViewed} />;
@@ -402,7 +463,108 @@ const UserDashboard = () => {
           </>
         );
 
-      default: return null;
+      case "notifications":
+        return (
+          <>
+            <div className="d-flex align-items-center justify-content-between mb-4">
+              <h5 className="fw-bold mb-0">
+                <i className="bi bi-bell me-2 text-warning" />
+                Notifications
+              </h5>
+              <div className="d-flex align-items-center gap-2">
+                {unreadNotifCount > 0 && (
+                  <span className="badge bg-warning text-dark">{unreadNotifCount} unread</span>
+                )}
+                {broadcastNotifs.length > 0 && unreadNotifCount > 0 && (
+                  <button
+                    className="btn btn-sm btn-outline-secondary fw-semibold"
+                    disabled={markingAllRead}
+                    onClick={async () => {
+                      setMarkingAllRead(true);
+                      try {
+                        await apiReadAllNotifications();
+                        fetchUserNotifications(notifPage);
+                      } catch {
+                        toast.error("Failed to mark all as read");
+                      } finally {
+                        setMarkingAllRead(false);
+                      }
+                    }}
+                  >
+                    {markingAllRead
+                      ? <span className="spinner-border spinner-border-sm" />
+                      : "Mark all read"
+                    }
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {notifLoading ? (
+              <div className="text-center py-5">
+                <div className="spinner-border text-warning" />
+              </div>
+            ) : broadcastNotifs.length === 0 ? (
+              <div className="card border-0 shadow-sm rounded-3">
+                <div className="card-body text-center py-5">
+                  <i className="bi bi-bell-slash fs-1 text-muted mb-3 d-block" />
+                  <p className="text-muted mb-0">No notifications yet.</p>
+                  <p className="text-muted small">Admin broadcasts will appear here.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="d-flex flex-column gap-3">
+                {broadcastNotifs.map((n, i) => (
+                  <div
+                    key={n.id ?? i}
+                    className={`card border-0 shadow-sm rounded-3 border-start border-4 ${
+                      n.isRead ? "border-secondary" : "border-warning"
+                    }`}
+                    style={{ opacity: n.isRead ? 0.75 : 1 }}
+                  >
+                    <div className="card-body px-4 py-3">
+                      <div className="d-flex justify-content-between align-items-start mb-1">
+                        <div className="d-flex align-items-center gap-2">
+                          {!n.isRead && (
+                            <span className="badge bg-warning text-dark" style={{ fontSize: 10 }}>NEW</span>
+                          )}
+                          <h6 className="fw-bold mb-0">{n.title}</h6>
+                        </div>
+                        <span className="text-muted ms-3" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                          <i className="bi bi-clock me-1" />
+                          {n.sentAt ? new Date(n.sentAt).toLocaleString() : ""}
+                        </span>
+                      </div>
+                      <p className="mb-0 text-secondary" style={{ fontSize: 14 }}>{n.body}</p>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Pagination – same design as admin tables, no search/limit controls */}
+                {notifTotalPages > 1 && (
+                  <nav className="d-flex justify-content-end align-items-center gap-2 px-3 py-2 border-top bg-white">
+                    <button className="btn btn-sm btn-outline-secondary"
+                      disabled={notifPage === 1} onClick={() => fetchUserNotifications(notifPage - 1)}>
+                      <i className="bi bi-chevron-left" />
+                    </button>
+                    {Array.from({ length: notifTotalPages }, (_, i) => i + 1).map((p) => (
+                      <button key={p}
+                        className={`btn btn-sm ${p === notifPage ? "btn-warning fw-bold" : "btn-outline-secondary"}`}
+                        onClick={() => fetchUserNotifications(p)}>{p}</button>
+                    ))}
+                    <button className="btn btn-sm btn-outline-secondary"
+                      disabled={notifPage === notifTotalPages} onClick={() => fetchUserNotifications(notifPage + 1)}>
+                      <i className="bi bi-chevron-right" />
+                    </button>
+                  </nav>
+                )}
+              </div>
+            )}
+          </>
+        );
+
+      default:
+        return null;
     }
   };
 

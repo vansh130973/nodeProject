@@ -1,11 +1,19 @@
 import db from "../../../config/db.js";
 import { normalize } from "../helpers/admin.helper.js";
 
-// `role` column is gone — "admin" username = super admin (enforced in middleware)
+// Column lists shared across queries — keeps SELECT lists DRY
 const ADMIN_LIST = "a.id, a.userName, a.email, a.phone, a.roleId, r.name AS roleName, COALESCE(a.status, 'active') AS status, a.isDeleted, COALESCE(a.createdAt, NOW()) AS createdAt";
 const ADMIN_LOGIN = "id, userName, password, email, phone, roleId, COALESCE(status, 'active') AS status, isDeleted";
 const USER_LIST = "u.id, u.firstName, u.lastName, u.userName, u.phone, u.email, u.gender, u.status, u.isDeleted, u.profilePicture, u.createdAt";
 
+/**
+ * Find non-deleted admins matching either email or username.
+ * Used for duplicate checks on register and edit.
+ *
+ * @param {string} email
+ * @param {string} userName
+ * @returns {Promise<object[]>}
+ */
 export const findAdminByEmailOrUsername = async (email, userName) => {
   try {
     const sql = "SELECT id, userName, email, roleId, COALESCE(status, 'active') AS status, isDeleted FROM admins WHERE isDeleted = 0 AND (email = ? OR userName = ?)";
@@ -17,6 +25,16 @@ export const findAdminByEmailOrUsername = async (email, userName) => {
   }
 };
 
+/**
+ * Insert a new admin record and return the full row.
+ *
+ * @param {string:userName}
+ * @param {string:password} Pre-hashed password
+ * @param {string:email}
+ * @param {string:phone}
+ * @param {number|null:roleId}
+ * @returns {Promise<object>} Newly created admin row
+ */
 export const insertAdmin = async (userName, password, email, phone, roleId) => {
   try {
     const sql = "INSERT INTO admins (userName, password, email, phone, roleId) VALUES (?, ?, ?, ?, ?)";
@@ -28,6 +46,12 @@ export const insertAdmin = async (userName, password, email, phone, roleId) => {
   }
 };
 
+/**
+ * Find a non-deleted admin by username (used for login).
+ *
+ * @param {string} userName
+ * @returns {Promise<object|null>}
+ */
 export const findAdminByUsername = async (userName) => {
   try {
     const sql = `SELECT ${ADMIN_LOGIN} FROM admins WHERE userName = ? AND isDeleted = 0`;
@@ -39,6 +63,12 @@ export const findAdminByUsername = async (userName) => {
   }
 };
 
+/**
+ * Find an admin by id with role name joined.
+ *
+ * @param {number} id
+ * @returns {Promise<object|null>}
+ */
 export const findAdminById = async (id) => {
   try {
     const sql = `SELECT ${ADMIN_LIST} FROM admins a LEFT JOIN roles r ON r.id = a.roleId WHERE a.id = ?`;
@@ -52,6 +82,14 @@ export const findAdminById = async (id) => {
 
 // ─── Admin CRUD ───────────────────────────────────────────────────────────────
 
+/**
+ * Fetch a paginated, searchable list of sub-admins (excludes the "admin" super-admin).
+ *
+ * @param {number} [page=1]
+ * @param {number} [limit=10]
+ * @param {string} [search=""]
+ * @returns {Promise<{ rows: object[], total: number }>}
+ */
 export const getAdminsWithPaginationAndCount = async (page = 1, limit = 10, search = "") => {
   try {
     const isAll = limit === "all" || Number(limit) <= 0;
@@ -85,6 +123,13 @@ export const getAdminsWithPaginationAndCount = async (page = 1, limit = 10, sear
   }
 };
 
+/**
+ * Update an admin row as master admin. Skips password update when not provided.
+ *
+ * @param {number} id
+ * @param {{ userName: string, email: string, phone: string, password?: string, roleId: number|null }} data
+ * @returns {Promise<object>} Updated admin row
+ */
 export const updateAdminByMaster = async (id, data) => {
   try {
     const { userName, email, phone, password, roleId } = data;
@@ -103,6 +148,12 @@ export const updateAdminByMaster = async (id, data) => {
   }
 };
 
+/**
+ * Soft-delete an admin and invalidate all their tokens.
+ *
+ * @param {number} id
+ * @returns {Promise<void>}
+ */
 export const softDeleteAdmin = async (id) => {
   try {
     const sql1 = "UPDATE admins SET status='deleted', isDeleted=1, updatedAt=NOW() WHERE id=? AND userName != 'admin'";
@@ -115,8 +166,15 @@ export const softDeleteAdmin = async (id) => {
   }
 };
 
-// ─── Users ────────────────────────────────────────────────────────────────────
-
+/**
+ * Fetch a paginated, filterable list of users for the admin panel.
+ *
+ * @param {number} [page=1]
+ * @param {number} [limit=10]
+ * @param {string} [status=""]  Filter by status; "all" or empty = no status filter
+ * @param {string} [search=""]  Search across name, username, email, phone
+ * @returns {Promise<{ rows: object[], total: number }>}
+ */
 export const getUsersWithPaginationAndCount = async (page = 1, limit = 10, status = "", search = "") => {
   try {
     const isAll = limit === "all" || Number(limit) <= 0;
@@ -158,6 +216,12 @@ export const getUsersWithPaginationAndCount = async (page = 1, limit = 10, statu
   }
 };
 
+/**
+ * Find a user by id for admin views (no password column).
+ *
+ * @param {number} id
+ * @returns {Promise<object|null>}
+ */
 export const findUserByIdAdmin = async (id) => {
   try {
     const sql = "SELECT id, firstName, lastName, userName, email, phone, status, isDeleted, gender, profilePicture, createdAt FROM users WHERE id = ?";
@@ -169,6 +233,13 @@ export const findUserByIdAdmin = async (id) => {
   }
 };
 
+/**
+ * Update a user's status column.
+ *
+ * @param {number} id
+ * @param {string} status  e.g. "active" | "inactive" | "deleted"
+ * @returns {Promise<void>}
+ */
 export const updateUserStatus = async (id, status) => {
   try {
     const sql = "UPDATE users SET status = ?, updatedAt = NOW() WHERE id = ?";
@@ -179,6 +250,12 @@ export const updateUserStatus = async (id, status) => {
   }
 };
 
+/**
+ * Soft-delete a user and invalidate all their tokens.
+ *
+ * @param {number} id
+ * @returns {Promise<void>}
+ */
 export const softDeleteUser = async (id) => {
   try {
     const sql1 = "UPDATE users SET status = 'deleted', isDeleted = 1, updatedAt = NOW() WHERE id = ?";
@@ -191,6 +268,12 @@ export const softDeleteUser = async (id) => {
   }
 };
 
+/**
+ * Remove all tokens for a user, forcing them to re-authenticate.
+ *
+ * @param {number} userId
+ * @returns {Promise<void>}
+ */
 export const forceLogoutUser = async (userId) => {
   try {
     const sql = "DELETE FROM userToken WHERE userId = ?";
@@ -201,6 +284,11 @@ export const forceLogoutUser = async (userId) => {
   }
 };
 
+/**
+ * Return all sub-admins (excludes "admin" super-admin) with role name.
+ *
+ * @returns {Promise<object[]>}
+ */
 export const getAllAdmins = async () => {
   try {
     const sql = `SELECT ${ADMIN_LIST} FROM admins a LEFT JOIN roles r ON r.id = a.roleId WHERE a.userName != 'admin'`;
@@ -212,15 +300,20 @@ export const getAllAdmins = async () => {
   }
 };
 
+/**
+ * Return aggregated user counts for the admin dashboard.
+ *
+ * @returns {Promise<{ totalUsers: number, activeUsers: number, pendingUsers: number, inactiveUsers: number, deletedUsers: number, totalAdmins: number }>}
+ */
 export const getDashboardCounts = async () => {
   try {
     const sql = `
       SELECT
         SUM(CASE WHEN u.isDeleted = 0 THEN 1 ELSE 0 END) AS totalUsers,
-        SUM(CASE WHEN u.status = 'active' AND u.isDeleted = 0 THEN 1 ELSE 0 END) AS activeUsers,
-        SUM(CASE WHEN u.status = 'pending' AND u.isDeleted = 0 THEN 1 ELSE 0 END) AS pendingUsers,
+        SUM(CASE WHEN u.status = 'active'   AND u.isDeleted = 0 THEN 1 ELSE 0 END) AS activeUsers,
+        SUM(CASE WHEN u.status = 'pending'  AND u.isDeleted = 0 THEN 1 ELSE 0 END) AS pendingUsers,
         SUM(CASE WHEN u.status = 'inactive' AND u.isDeleted = 0 THEN 1 ELSE 0 END) AS inactiveUsers,
-        SUM(CASE WHEN u.status = 'deleted' OR u.isDeleted = 1 THEN 1 ELSE 0 END) AS deletedUsers,
+        SUM(CASE WHEN u.status = 'deleted'  OR  u.isDeleted = 1 THEN 1 ELSE 0 END) AS deletedUsers,
         (SELECT COUNT(*) FROM admins WHERE userName != 'admin' AND isDeleted = 0) AS totalAdmins
       FROM users u
     `;
@@ -232,10 +325,16 @@ export const getDashboardCounts = async () => {
   }
 };
 
+/**
+ * Update a user's profile fields. Skips password when not provided.
+ *
+ * @param {number} id
+ * @param {{ firstName: string, lastName: string, email: string, phone: string, gender: string, password?: string }} data
+ * @returns {Promise<object>} Updated user row
+ */
 export const updateUserByAdmin = async (id, data) => {
   try {
     const { firstName, lastName, email, phone, gender, password } = data;
-
     if (password) {
       const sql = "UPDATE users SET firstName=?, lastName=?, email=?, phone=?, gender=?, password=?, updatedAt=NOW() WHERE id=?";
       await db.query(sql, [firstName, lastName, email, phone, gender, password, id]);
@@ -252,6 +351,13 @@ export const updateUserByAdmin = async (id, data) => {
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
+/**
+ * Persist a new JWT token for an admin session.
+ *
+ * @param {number} adminId
+ * @param {string} token
+ * @returns {Promise<void>}
+ */
 export const saveAdminToken = async (adminId, token) => {
   try {
     const sql = "INSERT INTO adminToken (adminId, token) VALUES (?, ?)";
@@ -262,6 +368,13 @@ export const saveAdminToken = async (adminId, token) => {
   }
 };
 
+/**
+ * Look up a token row by its value.
+ * Returns null when the token has been deleted (e.g. after logout).
+ *
+ * @param {string} token
+ * @returns {Promise<object|null>}
+ */
 export const findAdminToken = async (token) => {
   try {
     const sql = "SELECT adminId, token FROM adminToken WHERE token = ?";
@@ -273,6 +386,12 @@ export const findAdminToken = async (token) => {
   }
 };
 
+/**
+ * Delete a single token (used on logout).
+ *
+ * @param {string} token
+ * @returns {Promise<void>}
+ */
 export const deleteAdminToken = async (token) => {
   try {
     const sql = "DELETE FROM adminToken WHERE token = ?";
@@ -283,6 +402,12 @@ export const deleteAdminToken = async (token) => {
   }
 };
 
+/**
+ * Delete all tokens for an admin, forcing re-authentication on all devices.
+ *
+ * @param {number} adminId
+ * @returns {Promise<void>}
+ */
 export const deleteAllAdminTokens = async (adminId) => {
   try {
     const sql = "DELETE FROM adminToken WHERE adminId = ?";
@@ -293,6 +418,13 @@ export const deleteAllAdminTokens = async (adminId) => {
   }
 };
 
+/**
+ * Fetch the role-based permissions for an admin.
+ * Returns an empty array for super-admin or when no roleId is set.
+ *
+ * @param {number|null} roleId
+ * @returns {Promise<object[]>} Array of { moduleName, canView, canAdd, canEdit, canDelete }
+ */
 export const getAdminPermissions = async (roleId) => {
   try {
     if (!roleId) return [];
@@ -312,8 +444,13 @@ export const getAdminPermissions = async (roleId) => {
   }
 };
 
-// ─── Admin Own Profile ────────────────────────────────────────────────────────
-
+/**
+ * Update an admin's own profile fields (userName, email, phone, optionally profilePicture).
+ *
+ * @param {number} id
+ * @param {{ userName: string, email: string, phone: string, profilePicture?: string }} data
+ * @returns {Promise<object>} Updated admin row
+ */
 export const updateAdminOwnProfile = async (id, data) => {
   try {
     const { userName, email, phone, profilePicture } = data;
@@ -335,6 +472,13 @@ export const updateAdminOwnProfile = async (id, data) => {
   }
 };
 
+/**
+ * Overwrite an admin's password hash.
+ *
+ * @param {number} id
+ * @param {string} hashedPassword
+ * @returns {Promise<void>}
+ */
 export const updateAdminPassword = async (id, hashedPassword) => {
   try {
     const sql = "UPDATE admins SET password=? WHERE id=?";
@@ -345,6 +489,13 @@ export const updateAdminPassword = async (id, hashedPassword) => {
   }
 };
 
+/**
+ * Fetch an admin row that includes the password hash.
+ * Used only for password-change flows — never returned to the client.
+ *
+ * @param {number} id
+ * @returns {Promise<{ id: number, password: string }|null>}
+ */
 export const findAdminWithPasswordById = async (id) => {
   try {
     const sql = "SELECT id, password FROM admins WHERE id = ?";
@@ -356,6 +507,13 @@ export const findAdminWithPasswordById = async (id) => {
   }
 };
 
+/**
+ * Delete all tokens for every admin assigned to a given role.
+ * Called when a role is edited so affected admins must re-authenticate.
+ *
+ * @param {number} roleId
+ * @returns {Promise<void>}
+ */
 export const deleteTokensByRoleId = async (roleId) => {
   try {
     const sql = "DELETE FROM adminToken WHERE adminId IN (SELECT id FROM admins WHERE roleId = ? AND userName != 'admin')";

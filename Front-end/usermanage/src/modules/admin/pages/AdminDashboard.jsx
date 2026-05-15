@@ -17,6 +17,8 @@ import {
   apiEditAdminProfile,
   apiChangeAdminPassword,
   apiForceLogoutUser,
+  apiSendBroadcastNotification,
+  apiGetAdminNotifications,
 } from "../services/admin.service";
 import {
   apiGetAllModules,
@@ -37,7 +39,6 @@ import useAdminData from "../hooks/useAdminData";
 import InputField from "../../../components/InputField";
 import AdminTicketsSection from "../../ticket/components/AdminTicketsSection";
 import AdminTicketDetailSection from "../../ticket/components/AdminTicketDetailSection";
-// ticket API is called inside AdminTicketsSection — no direct import needed here
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 const INITIAL_ADMIN_FORM = { userName: "", email: "", phone: "", roleId: "", password: "", conformPassword: "" };
@@ -49,7 +50,6 @@ const normalizeModuleName = (value = "") =>
   String(value).trim().toLowerCase().replace(/[\s_-]+/g, "");
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
-
 const StatusBadge = ({ status }) => {
   const map = {
     active:   { cls: "bg-success",          label: "Active"   },
@@ -152,8 +152,7 @@ const fmtDate = (iso) =>
     ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
     : "—";
 
-// ─── Pagination ───────────────────────────────────────────────────────────────
-
+// ─── Pagination (reusable) ────────────────────────────────────────────────────
 const Pagination = ({ pagination, onPageChange }) => {
   const { page, totalPages } = pagination;
   if (totalPages <= 1) return null;
@@ -177,7 +176,6 @@ const Pagination = ({ pagination, onPageChange }) => {
 };
 
 // ─── Confirm Modal ────────────────────────────────────────────────────────────
-
 const ConfirmModal = ({ show, title, message, onConfirm, onCancel, danger = false }) => {
   if (!show) return null;
   return (
@@ -198,7 +196,6 @@ const ConfirmModal = ({ show, title, message, onConfirm, onCancel, danger = fals
 };
 
 // ─── Edit User Modal ──────────────────────────────────────────────────────────
-
 const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
   const [form, setForm] = useState({
     firstName: editTarget.firstName || "",
@@ -341,7 +338,6 @@ const EditUserModal = ({ user: editTarget, onClose, onSaved }) => {
 };
 
 // ─── Edit Admin Modal ─────────────────────────────────────────────────────────
-
 const EditAdminModal = ({ admin: editTarget, availableRoles, onClose, onSaved }) => {
   const [form, setForm] = useState({
     userName: editTarget.userName || "",
@@ -428,9 +424,7 @@ const EditAdminModal = ({ admin: editTarget, availableRoles, onClose, onSaved })
               >
                 <option value="">Select role</option>
                 {availableRoles.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name}
-                  </option>
+                  <option key={role.id} value={role.id}>{role.name}</option>
                 ))}
               </select>
               {errors.roleId && <div className="invalid-feedback">{errors.roleId}</div>}
@@ -478,7 +472,6 @@ const EditAdminModal = ({ admin: editTarget, availableRoles, onClose, onSaved })
 };
 
 // ─── User Status Dropdown ─────────────────────────────────────────────────────
-
 const StatusDropdown = ({ userId, currentStatus, onChanged }) => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -552,7 +545,6 @@ const StatusDropdown = ({ userId, currentStatus, onChanged }) => {
 };
 
 // ─── Admin Status Dropdown ────────────────────────────────────────────────────
-
 const AdminStatusDropdown = ({ adminId, currentStatus, onChanged }) => {
   const [loading, setLoading] = useState(false);
   const handleChange = async (e) => {
@@ -581,7 +573,6 @@ const AdminStatusDropdown = ({ adminId, currentStatus, onChanged }) => {
 };
 
 // ─── Modules Tab ──────────────────────────────────────────────────────────────
-
 const ModuleFormModal = ({ mode, initial, onClose, onSaved }) => {
   const [name,   setName]   = useState(initial?.name   ?? "");
   const [status, setStatus] = useState(initial?.status ?? "active");
@@ -784,7 +775,6 @@ const ModulesTab = () => {
 };
 
 // ─── Roles Tab ────────────────────────────────────────────────────────────────
-
 const PermissionGrid = ({ modules, permissions, onChange }) => {
   const toggle = (moduleId, key) => {
     const current = permissions[moduleId] ?? { canView: false, canAdd: false, canEdit: false, canDelete: false };
@@ -1157,7 +1147,6 @@ const RolesTab = () => {
 };
 
 // ─── Admin Own Profile Tab ────────────────────────────────────────────────────
-
 const AdminProfileTab = () => {
   const { user, updateUser } = useAuth();
   const [form, setForm] = useState({
@@ -1246,7 +1235,6 @@ const AdminProfileTab = () => {
 };
 
 // ─── Admin Change Password Tab ─────────────────────────────────────────────────
-
 const AdminChangePasswordTab = () => {
   const { logout } = useAuth();
   const navigate   = useNavigate();
@@ -1326,7 +1314,6 @@ const AdminChangePasswordTab = () => {
 };
 
 // ─── Main AdminDashboard ──────────────────────────────────────────────────────
-
 const AdminDashboard = () => {
   const { user } = useAuth();
   const navigate  = useNavigate();
@@ -1389,6 +1376,7 @@ const AdminDashboard = () => {
     if (pathname === "/admin/change-password") return "changePassword";
     if (pathname.startsWith("/admin/tickets/") && pathname !== "/admin/tickets") return "ticketDetail";
     if (pathname === "/admin/tickets")          return "tickets";
+    if (pathname === "/admin/notifications")    return "notifications";
     return "dashboard";
   };
   const activeTab = getActiveTab();
@@ -1396,23 +1384,49 @@ const AdminDashboard = () => {
   const [loadingData,     setLoadingData]     = useState(false);
   const [sidebarOpen,     setSidebarOpen]     = useState(true);
   const [unreadCount,     setUnreadCount]     = useState(0);
-  const [seenTicketIds,   setSeenTicketIds]   = useState(new Set());
+  const [seenTicketIds, setSeenTicketIds] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("admin_seenTicketIds");
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  });
+
+  const addAdminSeenTicket = (ticketId) => {
+    setSeenTicketIds((prev) => {
+      if (prev.has(ticketId)) return prev;
+      const next = new Set(prev);
+      next.add(ticketId);
+      try { sessionStorage.setItem("admin_seenTicketIds", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  };
+
+  const removeAdminSeenTicket = (ticketId) => {
+    setSeenTicketIds((prev) => {
+      if (!prev.has(ticketId)) return prev;
+      const next = new Set(prev);
+      next.delete(ticketId);
+      try { sessionStorage.setItem("admin_seenTicketIds", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  };
 
   // ── Socket listeners ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
 
-    // A user replied to a ticket → bump unread badge for admins
-    const onUserReply = ({ ticketId, subject, userName }) => {
-      setSeenTicketIds((prev) => {
-        if (prev.has(ticketId)) return prev;
+    const onUserReply = ({ ticketId }) => {
+      const isViewingThisTicket = window.location.pathname === `/admin/tickets/${ticketId}`;
+      removeAdminSeenTicket(ticketId);
+      if (!isViewingThisTicket) {
         setUnreadCount((c) => c + 1);
-        return prev;
-      });
-      toast.info(`New reply from ${userName} on ticket: "${subject}"`, { autoClose: 5000 });
+        toast.info(`Ticket #${ticketId}: new message arrived`, { autoClose: 5000 });
+      }
+      if (isViewingThisTicket) {
+        addAdminSeenTicket(ticketId);
+      }
     };
 
-    // User status changed by another admin (live refresh users list if visible)
     const onUserStatus = ({ userId, status }) => {
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, status } : u))
@@ -1428,10 +1442,43 @@ const AdminDashboard = () => {
     };
   }, [socket, setUsers]);
 
-  // unreadCount is now returned by apiAdminListTickets — updated via onUnreadChange from AdminTicketsSection
   const [adminForm,       setAdminForm]       = useState(INITIAL_ADMIN_FORM);
   const [adminFormErrors, setAdminFormErrors] = useState({});
   const [adminFormLoading,setAdminFormLoading]= useState(false);
+
+  // ── Notification broadcast state (MasterAdmin only) ───────────────────────
+  const [notifForm,    setNotifForm]    = useState({ title: "", body: "" });
+  const [notifSending, setNotifSending] = useState(false);
+  const [notifHistory, setNotifHistory] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  // Notification pagination state
+  const [notifPage,       setNotifPage]       = useState(1);
+  const [notifTotalPages, setNotifTotalPages] = useState(1);
+  const [notifTotal,      setNotifTotal]      = useState(0);
+
+  // Reusable fetch function for admin notifications
+  const fetchAdminNotifications = useCallback(async (page = 1) => {
+    setNotifLoading(true);
+    try {
+      const data = await apiGetAdminNotifications(page);
+      setNotifHistory(data.notifications ?? []);
+      setNotifPage(data.pagination.page);
+      setNotifTotalPages(data.pagination.totalPages);
+      setNotifTotal(data.pagination.total);
+    } catch {
+      // silent
+    } finally {
+      setNotifLoading(false);
+    }
+  }, []);
+
+  // Load notifications on mount if master admin
+  useEffect(() => {
+    if (isMasterAdmin) {
+      fetchAdminNotifications(1);
+    }
+  }, [isMasterAdmin, fetchAdminNotifications]);
+
   const [availableRoles,  setAvailableRoles]  = useState([]);
   const [filterStatus,    setFilterStatus]    = useState("all");
   const [searchQuery,     setSearchQuery]     = useState("");
@@ -1462,22 +1509,21 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (user?.userName !== "admin") return;
     if (activeTab !== "addAdmin" && activeTab !== "admins") return;
-    if (availableRoles.length > 0) return; // already loaded
+    if (availableRoles.length > 0) return;
     apiGetAllRoles()
       .then((res) => {
         const roleOptions = (res.roles || []).filter((role) => role.status === "active" && !role.isDeleted);
         setAvailableRoles(roleOptions);
       })
       .catch((err) => showApiError(err, toast.error));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]); // Fetch only when the relevant tabs are opened
+  }, [activeTab]);
 
   // ─── Users helpers ──────────────────────────────────────────────────────────
   const applyFilter = useCallback((status, search, page = 1) => {
     setLoadingData(true);
     fetchUsers(page, pagination.limit, status === "all" ? "" : status, search)
       .finally(() => setLoadingData(false));
-  }, [pagination.limit]); // eslint-disable-line
+  }, [pagination.limit]);
 
   const handleFilterChange = (status) => { setFilterStatus(status); applyFilter(status, searchQuery); };
 
@@ -1492,13 +1538,13 @@ const AdminDashboard = () => {
     setLoadingData(true);
     fetchUsers(page, pagination.limit, filterStatus === "all" ? "" : filterStatus, searchQuery)
       .finally(() => setLoadingData(false));
-  }, [pagination.limit, filterStatus, searchQuery]); // eslint-disable-line
+  }, [pagination.limit, filterStatus, searchQuery]);
 
   const handleUserLimitChange = useCallback((nextLimit) => {
     setLoadingData(true);
     fetchUsers(1, nextLimit, filterStatus === "all" ? "" : filterStatus, searchQuery)
       .finally(() => setLoadingData(false));
-  }, [filterStatus, searchQuery]); // eslint-disable-line
+  }, [filterStatus, searchQuery]);
 
   const handleStatusChanged = useCallback((userId, newStatus) => {
     setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, status: newStatus } : u));
@@ -1573,7 +1619,7 @@ const AdminDashboard = () => {
   // ─── Admins CRUD helpers ────────────────────────────────────────────────────
   const fetchAdminsPaginated = useCallback(async (page = 1, limit = 10, search = "") => {
     try {
-      const res = await apiGetAdminsWithPagination({ page, limit, search });
+      const res = await apiGetAdminsWithPagination({ page, limit: limit === "all" ? 10000 : limit, search });
       setAdmins(res.admins);
       setAdminPagination(res.pagination);
     } catch (err) {
@@ -1594,12 +1640,12 @@ const AdminDashboard = () => {
   const handleAdminPageChange = useCallback((page) => {
     setLoadingData(true);
     fetchAdminsPaginated(page, adminPagination.limit, adminSearch).finally(() => setLoadingData(false));
-  }, [adminPagination.limit, adminSearch]); // eslint-disable-line
+  }, [adminPagination.limit, adminSearch]);
 
   const handleAdminLimitChange = useCallback((nextLimit) => {
     setLoadingData(true);
     fetchAdminsPaginated(1, nextLimit, adminSearch).finally(() => setLoadingData(false));
-  }, [adminSearch]); // eslint-disable-line
+  }, [adminSearch]);
 
   const handleEditAdminSaved = useCallback((updatedAdmin) => {
     setAdmins((prev) => prev.map((a) => a.id === updatedAdmin.id ? { ...a, ...updatedAdmin } : a));
@@ -1619,30 +1665,26 @@ const AdminDashboard = () => {
         } catch (err) { showApiError(err, (m) => toast.error(m)); }
       },
     });
-  }, []); // eslint-disable-line
+  }, [fetchDashboard]);
 
   // ─── Unread ticket helpers ───────────────────────────────────────────────────
   const handleAdminUnreadChange = (count) => setUnreadCount(count);
 
   const handleAdminTicketViewed = (ticketId) => {
-    setSeenTicketIds((prev) => {
-      if (prev.has(ticketId)) return prev;
-      const next = new Set(prev);
-      next.add(ticketId);
-      return next;
-    });
+    addAdminSeenTicket(ticketId);
     setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
   // ─── Sidebar ────────────────────────────────────────────────────────────────
   const NAV_ITEMS = [
-    { label: "Dashboard",  path: "/admin/dashboard", tab: "dashboard", icon: "bi-speedometer2", moduleKey: "dashboard", action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
-    { label: "All Users",  path: "/admin/users",     tab: "users",     icon: "bi-people", moduleKey: "users", action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
-    { label: "Tickets",    path: "/admin/tickets",   tab: "tickets",   icon: "bi-ticket-perforated", moduleKey: "tickets", action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
-    { label: "All Admins", path: "/admin/admins",    tab: "admins",    icon: "bi-shield-lock", moduleKey: "admins", action: "canView", roles: ["MASTER_ADMIN"] },
-    { label: "Add Admin",  path: "/admin/add-admin", tab: "addAdmin",  icon: "bi-person-plus", moduleKey: "admins", action: "canAdd", roles: ["MASTER_ADMIN"] },
-    { label: "Modules",    path: "/admin/modules",   tab: "modules",   icon: "bi-grid", moduleKey: "modules", action: "canView", roles: ["MASTER_ADMIN"] },
-    { label: "Roles",      path: "/admin/roles",     tab: "roles",     icon: "bi-person-badge", moduleKey: "roles", action: "canView", roles: ["MASTER_ADMIN"] },
+    { label: "Dashboard",      path: "/admin/dashboard",     tab: "dashboard",      icon: "bi-speedometer2",        moduleKey: "dashboard",  action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
+    { label: "All Users",      path: "/admin/users",         tab: "users",          icon: "bi-people",              moduleKey: "users",      action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
+    { label: "Tickets",        path: "/admin/tickets",       tab: "tickets",        icon: "bi-ticket-perforated",   moduleKey: "tickets",    action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
+    { label: "All Admins",     path: "/admin/admins",        tab: "admins",         icon: "bi-shield-lock",         moduleKey: "admins",     action: "canView", roles: ["MASTER_ADMIN"] },
+    { label: "Add Admin",      path: "/admin/add-admin",     tab: "addAdmin",       icon: "bi-person-plus",         moduleKey: "admins",     action: "canAdd",  roles: ["MASTER_ADMIN"] },
+    { label: "Modules",        path: "/admin/modules",       tab: "modules",        icon: "bi-grid",                moduleKey: "modules",    action: "canView", roles: ["MASTER_ADMIN"] },
+    { label: "Roles",          path: "/admin/roles",         tab: "roles",          icon: "bi-person-badge",        moduleKey: "roles",      action: "canView", roles: ["MASTER_ADMIN"] },
+    { label: "Notifications",  path: "/admin/notifications", tab: "notifications",  icon: "bi-megaphone",           moduleKey: "dashboard",  action: "canView", roles: ["MASTER_ADMIN"] },
   ];
 
   const Sidebar = () => (
@@ -1656,7 +1698,6 @@ const AdminDashboard = () => {
         overflow: "hidden",
       }}
     >
-      {/* Toggle Button */}
       <div className="d-flex justify-content-end p-2">
         <button
           className="btn btn-dark border border-secondary"
@@ -1712,7 +1753,6 @@ const AdminDashboard = () => {
   // ─── Content ────────────────────────────────────────────────────────────────
   const renderContent = () => {
     switch (activeTab) {
-
       // ── Dashboard ──────────────────────────────────────────────────────────
       case "dashboard":
         if (!canAccess("dashboard", "canView")) { navigate("/unauthorized"); return null; }
@@ -1921,7 +1961,6 @@ const AdminDashboard = () => {
               </div>
             </div>
 
-            {/* Search bar */}
             <div className="card border-0 shadow-sm rounded-3 mb-3">
               <div className="card-body py-2 px-3">
                 <div className="d-flex flex-wrap gap-2 align-items-center">
@@ -2085,7 +2124,7 @@ const AdminDashboard = () => {
 
       case "tickets":
         if (!canAccess("tickets", "canView")) { navigate("/unauthorized"); return null; }
-        return <AdminTicketsSection onUnreadChange={handleAdminUnreadChange} />;
+        return <AdminTicketsSection onUnreadChange={handleAdminUnreadChange} seenTicketIds={seenTicketIds} />;
 
       case "ticketDetail":
         if (!canAccess("tickets", "canView")) { navigate("/unauthorized"); return null; }
@@ -2101,7 +2140,122 @@ const AdminDashboard = () => {
       case "changePassword":
         return <AdminChangePasswordTab />;
 
-      default: return null;
+      // ── Notifications (MASTER_ADMIN only) ───────────────────────────────────
+      case "notifications":
+        if (!isMasterAdmin) { navigate("/unauthorized"); return null; }
+        return (
+          <>
+            <h5 className="fw-bold mb-4">
+              <i className="bi bi-megaphone me-2 text-warning" />
+              Notifications
+            </h5>
+
+            <div className="card border-0 shadow-sm rounded-3 mb-4">
+              <div className="card-body p-4">
+                <h6 className="fw-semibold mb-3">Create Notification</h6>
+                <div className="mb-3">
+                  <label className="form-label fw-semibold small">Title</label>
+                  <input
+                    className="form-control"
+                    placeholder="Short headline…"
+                    value={notifForm.title}
+                    maxLength={100}
+                    onChange={(e) => setNotifForm((p) => ({ ...p, title: e.target.value }))}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-semibold small">Message</label>
+                  <textarea
+                    className="form-control"
+                    rows={4}
+                    placeholder="Full notification body…"
+                    value={notifForm.body}
+                    maxLength={500}
+                    onChange={(e) => setNotifForm((p) => ({ ...p, body: e.target.value }))}
+                  />
+                  <div className="text-end text-muted" style={{ fontSize: 11 }}>
+                    {notifForm.body.length}/500
+                  </div>
+                </div>
+                <button
+                  className="btn btn-warning fw-semibold"
+                  disabled={notifSending || !notifForm.title.trim() || !notifForm.body.trim()}
+                  onClick={async () => {
+                    setNotifSending(true);
+                    try {
+                      const res = await apiSendBroadcastNotification(notifForm);
+                      toast.success("Notification sent!");
+                      setNotifHistory((prev) => [res.notification, ...prev].slice(0, 20));
+                      setNotifForm({ title: "", body: "" });
+                      fetchAdminNotifications(1);
+                    } catch (err) {
+                      showApiError(err, (m) => toast.error(m));
+                    } finally {
+                      setNotifSending(false);
+                    }
+                  }}
+                >
+                  {notifSending
+                    ? <><span className="spinner-border spinner-border-sm me-2" />Sending…</>
+                    : <><i className="bi bi-send me-2" />Send</>
+                  }
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary fw-semibold ms-2"
+                  disabled={notifSending}
+                  onClick={() => {
+                    setNotifForm({ title: "", body: "" });
+                  }}
+                >
+                  <i className="bi bi-x-circle me-2" />
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {/* History with pagination */}
+            {notifLoading ? (
+              <div className="text-center py-4">
+                <div className="spinner-border text-warning" />
+              </div>
+            ) : notifHistory.length > 0 ? (
+              <div className="card border-0 shadow-sm rounded-3">
+                <div className="card-body p-4">
+                  <h6 className="fw-semibold mb-3">
+                    Sent Notifications
+                    <span className="badge bg-secondary ms-2" style={{ fontSize: 11 }}>
+                      {notifTotal}
+                    </span>
+                  </h6>
+                  {notifHistory.map((n, i) => (
+                    <div key={n.id ?? i} className="border rounded-3 p-3 mb-2 bg-light">
+                      <div className="d-flex justify-content-between align-items-start">
+                        <strong className="small">{n.title}</strong>
+                        <span className="text-muted ms-3" style={{ fontSize: 11, whiteSpace: "nowrap" }}>
+                          {n.sentAt ? new Date(n.sentAt).toLocaleString() : ""}
+                        </span>
+                      </div>
+                      <p className="mb-0 small text-muted mt-1">{n.body}</p>
+                    </div>
+                  ))}
+                </div>
+                {/* Reusable Pagination component – no search, no limit */}
+                <Pagination pagination={{ page: notifPage, totalPages: notifTotalPages }} onPageChange={fetchAdminNotifications} />
+              </div>
+            ) : (
+              <div className="card border-0 shadow-sm rounded-3">
+                <div className="card-body text-center py-4">
+                  <i className="bi bi-megaphone fs-1 text-muted mb-2 d-block" />
+                  <p className="text-muted mb-0 small">No notifications sent yet.</p>
+                </div>
+              </div>
+            )}
+          </>
+        );
+
+      default:
+        return null;
     }
   };
 

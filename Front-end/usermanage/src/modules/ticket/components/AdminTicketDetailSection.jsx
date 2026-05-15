@@ -7,6 +7,7 @@ import {
   apiAdminUpdateTicketStatus,
 } from "../services/ticket.service";
 import { showApiError } from "../../../utils/api";
+import { useSocket } from "../../../context/SocketContext";
 
 const STATUS_META = {
   open:{ cls:"bg-success",label:"Open" },
@@ -41,6 +42,7 @@ const AdminTicketDetailSection = ({ onTicketViewed, canEdit = false }) => {
   const navigate = useNavigate();
   const bottomRef = useRef(null);
   const fileRef   = useRef(null);
+  const socket    = useSocket();
 
   const [ticket,         setTicket]         = useState(null);
   const [messages,       setMessages]       = useState([]);
@@ -68,6 +70,36 @@ const AdminTicketDetailSection = ({ onTicketViewed, canEdit = false }) => {
   };
 
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Join ticket room for live 1-to-1 messages ────────────────────────────
+  useEffect(() => {
+    if (!socket || !id) return;
+    socket.emit("ticket:join", { ticketId: Number(id) });
+
+    const onLiveMessage = (msg) => {
+      // Only append if message is from user (admin's own messages are set after API response)
+      if (msg.senderType === "user") {
+        setMessages((prev) => {
+          if (msg.messageId && prev.some((m) => m.id === msg.messageId)) return prev;
+          return [...prev, {
+            id:         msg.messageId,
+            message:    msg.message,
+            senderType: msg.senderType,
+            file:       msg.file ?? null,
+            createdAt:  msg.createdAt,
+          }];
+        });
+        onTicketViewed?.(Number(id)); // mark as seen since admin is watching
+      }
+    };
+
+    socket.on("ticket:liveMessage", onLiveMessage);
+
+    return () => {
+      socket.emit("ticket:leave", { ticketId: Number(id) });
+      socket.off("ticket:liveMessage", onLiveMessage);
+    };
+  }, [socket, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
