@@ -1,26 +1,35 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-const ProtectedRoute = ({ children, allowedRoles = [] }) => {
+const isUserAccount = (user) => Boolean(user?.id && user.firstName !== undefined);
+const isAdminAccount = (user) => Boolean(user?.id && user.firstName === undefined);
+const isMasterAdmin = (user) => user?.userName === "admin" || user?.isMasterAdmin === true;
+
+const ProtectedRoute = ({ children, userOnly = false, adminOnly = false, masterOnly = false }) => {
   const { user, loading } = useAuth();
 
-  // Wait for AuthContext's initial /me load to finish
   if (loading) {
     return (
       <div className="min-vh-100 d-flex align-items-center justify-content-center">
-        <div className="spinner-border text-warning" />
+        <div className="spinner-border text-warning" role="status" />
       </div>
     );
   }
 
-  // No user → redirect to the right login page
   if (!user) {
-    const isAdmin = allowedRoles.some((r) => r === "ADMIN" || r === "MASTER_ADMIN");
-    return <Navigate to={isAdmin ? "/admin/login" : "/login"} replace />;
+    const loginPath = adminOnly || masterOnly ? "/admin/login" : "/login";
+    return <Navigate to={loginPath} replace />;
   }
 
-  // Authenticated but wrong role
-  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+  if (userOnly && !isUserAccount(user)) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  if ((adminOnly || masterOnly) && !isAdminAccount(user)) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  if (masterOnly && !isMasterAdmin(user)) {
     return <Navigate to="/unauthorized" replace />;
   }
 

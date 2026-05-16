@@ -4,7 +4,12 @@ import { findAdminToken } from "../modules/admin/models/admin.model.js";
 import { getPermission } from "../modules/role/models/role.model.js";
 import { sendErrorResponse } from "../common/http/response.js";
 
-const isSuperAdmin = (user) => user?.userName === "admin";
+/** Master admin is the fixed account with userName "admin" (see admins table in nodeProject.sql). */
+export const isMasterAdmin = (user) => user?.userName === "admin";
+
+export const isAdminAccount = (user) => Boolean(user?.id && user.firstName === undefined);
+
+export const isUserAccount = (user) => Boolean(user?.id && user.firstName !== undefined);
 
 const isAdminPayload = (decoded) =>
   decoded && decoded.id && !decoded.firstName;
@@ -37,21 +42,28 @@ export const authenticate = async (req, res, next) => {
   }
 };
 
-export const roleCheck = (...roles) => {
-  return (req, res, next) => {
-    const user = req.user;
+/** End-user routes (JWT includes firstName). */
+export const requireUser = (req, res, next) => {
+  if (!isUserAccount(req.user)) {
+    return sendErrorResponse(res, "Access denied.", 403);
+  }
+  next();
+};
 
-    // "admin" username always passes any check that includes an admin role
-    if (isSuperAdmin(user)) {
-      const adminRoles = ["ADMIN", "MASTER_ADMIN"];
-      if (roles.some((r) => adminRoles.includes(r))) return next();
-    }
+/** Any authenticated admin (sub-admin or master). */
+export const requireAdmin = (req, res, next) => {
+  if (!isAdminAccount(req.user)) {
+    return sendErrorResponse(res, "Access denied.", 403);
+  }
+  next();
+};
 
-    if (!roles.includes(user.role)) {
-      return sendErrorResponse(res, "Access denied.", 403);
-    }
-    next();
-  };
+/** Master admin only — userName must be "admin". */
+export const requireMasterAdmin = (req, res, next) => {
+  if (!isMasterAdmin(req.user)) {
+    return sendErrorResponse(res, "Access denied.", 403);
+  }
+  next();
 };
 
 const normalizeModuleName = (value = "") =>
@@ -75,14 +87,11 @@ const buildModuleAliases = (moduleNames) => {
 export const modulePermissionCheck = (moduleNames, action = "canView") => {
   return async (req, res, next) => {
     try {
-      // "admin" username — unrestricted access to everything
-      if (isSuperAdmin(req.user)) return next();
+      if (isMasterAdmin(req.user)) return next();
 
-      // Dashboard is always reachable for any authenticated admin
       const aliases = buildModuleAliases(moduleNames);
       if (aliases.includes("dashboard")) return next();
 
-      // Regular admins must have a roleId and the correct permission
       if (!req.user.roleId) {
         return sendErrorResponse(res, "No role assigned to this admin.", 403);
       }

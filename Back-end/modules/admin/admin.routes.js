@@ -1,7 +1,12 @@
 import express from "express";
 import upload from "../../middlewares/upload.js";
 import { validate } from "../../middlewares/validate.js";
-import { authenticate, roleCheck, modulePermissionCheck } from "../../middlewares/authMiddleware.js";
+import {
+  authenticate,
+  requireAdmin,
+  requireMasterAdmin,
+  modulePermissionCheck,
+} from "../../middlewares/authMiddleware.js";
 import {
   addAdmin,
   loginAdmin,
@@ -36,35 +41,35 @@ const router = express.Router();
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 router.post("/login",        validate(loginAdminSchema), loginAdmin);
 router.post("/logout",       authenticate, logoutAdmin);
-router.get( "/permissions",  authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), getMyPermissions);
+router.get( "/permissions",  authenticate, requireAdmin, getMyPermissions);
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 router.get("/dashboard",
   authenticate,
-  roleCheck("MASTER_ADMIN", "ADMIN"),
+  requireAdmin,
   modulePermissionCheck(["dashboard"], "canView"),
   getDashboard
 );
 
 // ─── Users ────────────────────────────────────────────────────────────────────
-router.get(    "/users",            authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), modulePermissionCheck(["users", "user"], "canView"),   showAllUsers);
-router.get(    "/users/:id",        authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), modulePermissionCheck(["users", "user"], "canView"),   getUserById);
-router.put(    "/users/:id",        authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), modulePermissionCheck(["users", "user"], "canEdit"),   validate(editUserSchema), editUser);
-router.patch(  "/users/:id/status", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), modulePermissionCheck(["users", "user"], "canEdit"),   validate(updateUserStatusSchema), changeUserStatus);
-router.delete( "/users/:id",        authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), modulePermissionCheck(["users", "user"], "canDelete"), deleteUser);
-router.post(   "/users/:id/logout", authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), modulePermissionCheck(["users", "user"], "canEdit"),   logoutUserByAdmin);
+router.get(    "/users",            authenticate, requireAdmin, modulePermissionCheck(["users", "user"], "canView"),   showAllUsers);
+router.get(    "/users/:id",        authenticate, requireAdmin, modulePermissionCheck(["users", "user"], "canView"),   getUserById);
+router.put(    "/users/:id",        authenticate, requireAdmin, modulePermissionCheck(["users", "user"], "canEdit"),   validate(editUserSchema), editUser);
+router.patch(  "/users/:id/status", authenticate, requireAdmin, modulePermissionCheck(["users", "user"], "canEdit"),   validate(updateUserStatusSchema), changeUserStatus);
+router.delete( "/users/:id",        authenticate, requireAdmin, modulePermissionCheck(["users", "user"], "canDelete"), deleteUser);
+router.post(   "/users/:id/logout", authenticate, requireAdmin, modulePermissionCheck(["users", "user"], "canEdit"),   logoutUserByAdmin);
 
-// ─── Admins ───────────────────────────────────────────────────────────────────
-router.post(   "/addAdmin",       authenticate, roleCheck("MASTER_ADMIN"), validate(addAdminSchema), addAdmin);
-router.get(    "/showAllAdmins",  authenticate, roleCheck("MASTER_ADMIN"), showAllAdmins);
-router.get(    "/admins",         authenticate, roleCheck("MASTER_ADMIN"), showAdminsWithPagination);
-router.get(    "/admins/:id",     authenticate, roleCheck("MASTER_ADMIN"), getAdminById);
-router.put(    "/admins/:id",     authenticate, roleCheck("MASTER_ADMIN"), validate(editAdminSchema), editAdmin);
-router.delete( "/admins/:id",     authenticate, roleCheck("MASTER_ADMIN"), deleteAdmin);
+// ─── Admins (master only) ─────────────────────────────────────────────────────
+router.post(   "/addAdmin",       authenticate, requireMasterAdmin, validate(addAdminSchema), addAdmin);
+router.get(    "/showAllAdmins",  authenticate, requireMasterAdmin, showAllAdmins);
+router.get(    "/admins",         authenticate, requireMasterAdmin, showAdminsWithPagination);
+router.get(    "/admins/:id",     authenticate, requireMasterAdmin, getAdminById);
+router.put(    "/admins/:id",     authenticate, requireMasterAdmin, validate(editAdminSchema), editAdmin);
+router.delete( "/admins/:id",     authenticate, requireMasterAdmin, deleteAdmin);
 
 // ─── Own profile ──────────────────────────────────────────────────────────────
-router.get("/profile",          authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), getAdminProfile);
-router.put("/profile",          authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), upload.single("profilePicture"), editAdminProfile);
-router.put("/change-password",  authenticate, roleCheck("MASTER_ADMIN", "ADMIN"), changeAdminOwnPassword);
+router.get("/profile",          authenticate, requireAdmin, getAdminProfile);
+router.put("/profile",          authenticate, requireAdmin, upload.single("profilePicture"), editAdminProfile);
+router.put("/change-password",  authenticate, requireAdmin, changeAdminOwnPassword);
 
 export default router;

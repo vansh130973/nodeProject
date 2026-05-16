@@ -37,7 +37,12 @@ const AppNavbar = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  const isAdmin = user?.role === "ADMIN" || user?.role === "MASTER_ADMIN";
+  const isAdmin = Boolean(user?.id && user.firstName === undefined);
+  const accountLabel = user?.userName === "admin" || user?.isMasterAdmin
+    ? "Master Admin"
+    : isAdmin
+      ? "Admin"
+      : "User";
 
   useEffect(() => {
     const handler = (e) => {
@@ -251,7 +256,7 @@ const AppNavbar = () => {
                         color: "#6b7280",
                       }}
                     >
-                      {user.role?.replace("_", " ")}
+                      {accountLabel}
                     </div>
                   </div>
                 </div>

@@ -1677,14 +1677,14 @@ const AdminDashboard = () => {
 
   // ─── Sidebar ────────────────────────────────────────────────────────────────
   const NAV_ITEMS = [
-    { label: "Dashboard",      path: "/admin/dashboard",     tab: "dashboard",      icon: "bi-speedometer2",        moduleKey: "dashboard",  action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
-    { label: "All Users",      path: "/admin/users",         tab: "users",          icon: "bi-people",              moduleKey: "users",      action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
-    { label: "Tickets",        path: "/admin/tickets",       tab: "tickets",        icon: "bi-ticket-perforated",   moduleKey: "tickets",    action: "canView", roles: ["ADMIN", "MASTER_ADMIN"] },
-    { label: "All Admins",     path: "/admin/admins",        tab: "admins",         icon: "bi-shield-lock",         moduleKey: "admins",     action: "canView", roles: ["MASTER_ADMIN"] },
-    { label: "Add Admin",      path: "/admin/add-admin",     tab: "addAdmin",       icon: "bi-person-plus",         moduleKey: "admins",     action: "canAdd",  roles: ["MASTER_ADMIN"] },
-    { label: "Modules",        path: "/admin/modules",       tab: "modules",        icon: "bi-grid",                moduleKey: "modules",    action: "canView", roles: ["MASTER_ADMIN"] },
-    { label: "Roles",          path: "/admin/roles",         tab: "roles",          icon: "bi-person-badge",        moduleKey: "roles",      action: "canView", roles: ["MASTER_ADMIN"] },
-    { label: "Notifications",  path: "/admin/notifications", tab: "notifications",  icon: "bi-megaphone",           moduleKey: "dashboard",  action: "canView", roles: ["MASTER_ADMIN"] },
+    { label: "Dashboard",      path: "/admin/dashboard",     tab: "dashboard",      icon: "bi-speedometer2",        moduleKey: "dashboard",  action: "canView", masterOnly: false },
+    { label: "All Users",      path: "/admin/users",         tab: "users",          icon: "bi-people",              moduleKey: "users",      action: "canView", masterOnly: false },
+    { label: "Tickets",        path: "/admin/tickets",       tab: "tickets",        icon: "bi-ticket-perforated",   moduleKey: "tickets",    action: "canView", masterOnly: false },
+    { label: "All Admins",     path: "/admin/admins",        tab: "admins",         icon: "bi-shield-lock",         moduleKey: "admins",     action: "canView", masterOnly: true },
+    { label: "Add Admin",      path: "/admin/add-admin",     tab: "addAdmin",       icon: "bi-person-plus",         moduleKey: "admins",     action: "canAdd",  masterOnly: true },
+    { label: "Modules",        path: "/admin/modules",       tab: "modules",        icon: "bi-grid",                moduleKey: "modules",    action: "canView", masterOnly: true },
+    { label: "Roles",          path: "/admin/roles",         tab: "roles",          icon: "bi-person-badge",        moduleKey: "roles",      action: "canView", masterOnly: true },
+    { label: "Notifications",  path: "/admin/notifications", tab: "notifications",  icon: "bi-megaphone",           moduleKey: "dashboard",  action: "canView", masterOnly: true },
   ];
 
   const Sidebar = () => (
@@ -1717,8 +1717,8 @@ const AdminDashboard = () => {
 
       <nav className="flex-grow-1 py-2">
         {NAV_ITEMS.filter(
-          ({ roles, moduleKey, action }) =>
-            roles.includes(user?.role) && canAccess(moduleKey, action),
+          ({ masterOnly, moduleKey, action }) =>
+            (!masterOnly || isMasterAdmin) && canAccess(moduleKey, action),
         ).map(({ label, path, tab, icon }) => {
           const navActive =
             tab === "tickets"

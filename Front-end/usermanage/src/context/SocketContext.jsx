@@ -81,7 +81,7 @@ export const SocketProvider = ({ children }) => {
     };
     // Re-run only when the logged-in identity changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, user?.role]);
+  }, [user?.id, user?.userName, user?.firstName]);
 
   return (
     <SocketContext.Provider value={socket}>

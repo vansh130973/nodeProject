@@ -19,9 +19,6 @@ import AdminDashboard from "./modules/admin/pages/AdminDashboard";
 
 import Unauthorized from "./components/Unauthorized";
 
-const ADMIN_ROLES  = ["ADMIN", "MASTER_ADMIN"];
-const MASTER_ROLES = ["MASTER_ADMIN"];
-
 const Layout = ({ children }) => (
   <>
     <AppNavbar />
@@ -30,13 +27,13 @@ const Layout = ({ children }) => (
 );
 
 const UserRoute = ({ children }) => (
-  <ProtectedRoute allowedRoles={["USER"]}>
+  <ProtectedRoute userOnly>
     <Layout>{children}</Layout>
   </ProtectedRoute>
 );
 
-const AdminRoute = ({ children, roles = ADMIN_ROLES }) => (
-  <ProtectedRoute allowedRoles={roles}>
+const AdminRoute = ({ children, masterOnly = false }) => (
+  <ProtectedRoute adminOnly masterOnly={masterOnly}>
     <Layout>{children}</Layout>
   </ProtectedRoute>
 );
@@ -73,7 +70,7 @@ const App = () => (
         <Route path="/tickets/:id"      element={<UserRoute><UserDashboard /></UserRoute>} />
         <Route path="/notifications"    element={<UserRoute><UserDashboard /></UserRoute>} />
 
-        {/* Admin routes (ADMIN + MASTER_ADMIN) */}
+        {/* Admin routes (any admin; master = userName "admin") */}
         <Route path="/admin/dashboard"       element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/tickets"         element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/tickets/:id"     element={<AdminRoute><AdminDashboard /></AdminRoute>} />
@@ -81,12 +78,12 @@ const App = () => (
         <Route path="/admin/profile"         element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/change-password" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
 
-        {/* Master admin only */}
-        <Route path="/admin/admins"     element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/add-admin"  element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/modules"    element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/roles"      element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/notifications"  element={<AdminRoute roles={MASTER_ROLES}><AdminDashboard /></AdminRoute>} />
+        {/* Master admin only (userName "admin") */}
+        <Route path="/admin/admins"          element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/add-admin"       element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/modules"         element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/roles"           element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/notifications"   element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

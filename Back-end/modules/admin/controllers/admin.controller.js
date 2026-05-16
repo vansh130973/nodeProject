@@ -106,13 +106,12 @@ export const loginAdmin = async (req, res) => {
       ? []
       : await getAdminPermissions(admin.roleId);
 
-    const syntheticRole = isSuperAdmin(admin.userName) ? "MASTER_ADMIN" : "ADMIN";
     const tokenPayload = {
       ...formatAdminData({
         ...admin,
         permissions: buildPermissionMap(permissions),
       }),
-      role: syntheticRole, // needed by roleCheck middleware — not stored in DB anymore
+      isMasterAdmin: isSuperAdmin(admin.userName),
     };
 
     const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: "1h" });

@@ -1,5 +1,10 @@
 import express from "express";
-import { authenticate, roleCheck, modulePermissionCheck } from "../../middlewares/authMiddleware.js";
+import {
+  authenticate,
+  requireUser,
+  requireAdmin,
+  modulePermissionCheck,
+} from "../../middlewares/authMiddleware.js";
 import upload from "../../middlewares/upload.js";
 import { validate } from "../../middlewares/validate.js";
 import {
@@ -22,11 +27,11 @@ import {
 // ─── User ticket router — mounted at /tickets ─────────────────────────────────
 export const userTicketRouter = express.Router();
 
-userTicketRouter.post(  "/",              authenticate, roleCheck("USER"), upload.single("file"), validate(createTicketSchema), createTicket);
-userTicketRouter.get(   "/",              authenticate, roleCheck("USER"), getMyTickets);
-userTicketRouter.get(   "/:id",          authenticate, roleCheck("USER"), getTicketDetailUser);
-userTicketRouter.post(  "/:id/messages", authenticate, roleCheck("USER"), upload.single("file"), validate(addMessageSchema), addMessageUser);
-userTicketRouter.patch( "/:id/status",   authenticate, roleCheck("USER"), validate(updateTicketStatusSchema), patchTicketStatusUser);
+userTicketRouter.post(  "/",              authenticate, requireUser, upload.single("file"), validate(createTicketSchema), createTicket);
+userTicketRouter.get(   "/",              authenticate, requireUser, getMyTickets);
+userTicketRouter.get(   "/:id",          authenticate, requireUser, getTicketDetailUser);
+userTicketRouter.post(  "/:id/messages", authenticate, requireUser, upload.single("file"), validate(addMessageSchema), addMessageUser);
+userTicketRouter.patch( "/:id/status",   authenticate, requireUser, validate(updateTicketStatusSchema), patchTicketStatusUser);
 
 // ─── Admin ticket router — mounted at /admin/tickets ─────────────────────────
 export const adminTicketRouter = express.Router();
@@ -34,21 +39,21 @@ export const adminTicketRouter = express.Router();
 adminTicketRouter.get(
   "/",
   authenticate,
-  roleCheck("MASTER_ADMIN", "ADMIN"),
+  requireAdmin,
   modulePermissionCheck(["tickets", "ticket"], "canView"),
   listTicketsAdmin
 );
 adminTicketRouter.get(
   "/:id",
   authenticate,
-  roleCheck("MASTER_ADMIN", "ADMIN"),
+  requireAdmin,
   modulePermissionCheck(["tickets", "ticket"], "canView"),
   getTicketDetailAdmin
 );
 adminTicketRouter.post(
   "/:id/messages",
   authenticate,
-  roleCheck("MASTER_ADMIN", "ADMIN"),
+  requireAdmin,
   modulePermissionCheck(["tickets", "ticket"], "canEdit"),
   upload.single("file"),
   validate(addMessageSchema),
@@ -57,7 +62,7 @@ adminTicketRouter.post(
 adminTicketRouter.patch(
   "/:id/status",
   authenticate,
-  roleCheck("MASTER_ADMIN", "ADMIN"),
+  requireAdmin,
   modulePermissionCheck(["tickets", "ticket"], "canEdit"),
   validate(updateTicketStatusSchema),
   patchTicketStatusAdmin
