@@ -2,11 +2,6 @@ import { moveTicketAttachment } from "../../../middlewares/upload.js";
 import { findUserById } from "../../user/models/user.model.js";
 import { findAdminById } from "../../admin/models/admin.model.js";
 import {
-  emitNewMessageBadge,
-  emitAdminNewReply,
-  emitTicketStatusChanged,
-} from "../../../socket/socketManager.js";
-import {
   insertTicket,
   updateTicketFile,
   findTicketById,
@@ -47,7 +42,7 @@ const formatMessages = (messages) =>
   messages.map((m) => ({ ...m, file: buildFileUrl(m.file) }));
 
 /**
- * Run a notification/socket side-effect without letting failures bubble up.
+ * Run a notification side-effect without letting failures bubble up.
  * A notification error should never reject the main HTTP response.
  *
  * @param {() => Promise<void>} fn
@@ -170,7 +165,7 @@ export const getTicketDetailUser = async (req, res) => {
 /**
  * POST /tickets/:id/messages
  * User sends a reply message (text and/or file attachment) on their ticket.
- * Emits a socket event to notify all admins of the new reply.
+ * Notifies all admins of the new reply.
  *
  * @param {object} req HTTP request — params.id: ticket id; body.message; optional file
  * @param {object} res HTTP response
@@ -202,17 +197,6 @@ export const addMessageUser = async (req, res) => {
       preview:   text,
       ticketId,
       fromLabel: `User ${owner?.userName ?? req.user.id}`,
-    }));
-
-    safeNotify(() => emitAdminNewReply({
-      ticketId,
-      subject:    ticket.subject,
-      userName:   owner?.userName ?? req.user.id,
-      messageId,
-      message:    text,
-      senderType: "user",
-      file:       filePath ? buildFileUrl(filePath) : null,
-      createdAt,
     }));
 
     const messages = await getTicketMessages(ticketId);
@@ -315,7 +299,7 @@ export const getTicketDetailAdmin = async (req, res) => {
 /**
  * POST /admin/tickets/:id/messages
  * Admin sends a reply message (text and/or file attachment) on a ticket.
- * Emits a socket event to notify the ticket owner of the new reply.
+ * Notifies the ticket owner of the new reply.
  *
  * @param {object} req HTTP request — params.id: ticket id; body.message; optional file
  * @param {object} res HTTP response
@@ -349,16 +333,6 @@ export const addMessageAdmin = async (req, res) => {
       fromLabel: `Support (${adminRow?.userName ?? "admin"})`,
     }));
 
-    safeNotify(() => emitNewMessageBadge(ticket.userId, {
-      ticketId,
-      subject:    ticket.subject,
-      messageId,
-      message:    text,
-      senderType: "admin",
-      file:       filePath ? buildFileUrl(filePath) : null,
-      createdAt,
-    }));
-
     const messages = await getTicketMessages(ticketId);
     return sendSuccessResponse(res, "Message sent", { messages: formatMessages(messages) });
   } catch (error) {
@@ -370,7 +344,6 @@ export const addMessageAdmin = async (req, res) => {
 /**
  * PATCH /admin/tickets/:id/status
  * Admin updates the status of any ticket.
- * Emits a socket event so the ticket owner is notified in real time.
  *
  * @param {object} req HTTP request — params.id: ticket id; body.status
  * @param {object} res HTTP response
@@ -383,8 +356,6 @@ export const patchTicketStatusAdmin = async (req, res) => {
     if (!ticket) return sendErrorResponse(res, "Ticket not found", 404);
 
     await updateTicketStatus(ticketId, req.body.status);
-    safeNotify(() => emitTicketStatusChanged(ticket.userId, ticketId, req.body.status));
-
     const updated             = await findTicketWithOwner(ticketId);
     const { ownerEmail, ...rest } = updated;
     return sendSuccessResponse(res, "Status updated", {

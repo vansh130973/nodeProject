@@ -4,7 +4,6 @@ import { toast } from "react-toastify";
 import { apiGetMyTickets, apiCreateTicket } from "../services/ticket.service";
 import { showApiError } from "../../../utils/api";
 import InputField from "../../../components/InputField";
-import { useSocket } from "../../../context/SocketContext";
 
 const STATUS_META = {
   open:       { cls: "bg-success",        label: "Open" },
@@ -48,7 +47,6 @@ const EMPTY_FORM = { subject: "", description: "" };
 const UserTicketsSection = ({ onTicketsLoaded, seenTicketIds = new Set() }) => {
   const navigate = useNavigate();
   const fileRef  = useRef(null);
-  const socket   = useSocket();
 
   const [tickets,    setTickets]    = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -73,48 +71,6 @@ const UserTicketsSection = ({ onTicketsLoaded, seenTicketIds = new Set() }) => {
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Live socket update: update ticket row instantly on new admin reply ──────
-  useEffect(() => {
-    if (!socket) return;
-
-    // Admin replied → update that row's status to adminReply immediately
-    const onNewMessage = ({ ticketId }) => {
-      setTickets((prev) =>
-        prev.map((t) =>
-          t.id === ticketId ? { ...t, status: "adminReply" } : t
-        )
-      );
-    };
-
-    // User sent their own reply (confirmed from server via liveMessage) → update to userReply
-    const onLiveMessage = ({ ticketId, senderType }) => {
-      if (senderType === "user") {
-        setTickets((prev) =>
-          prev.map((t) =>
-            t.id === ticketId ? { ...t, status: "userReply" } : t
-          )
-        );
-      }
-    };
-
-    // Ticket status changed by admin (e.g. closed)
-    const onStatusChanged = ({ ticketId, status }) => {
-      setTickets((prev) =>
-        prev.map((t) =>
-          t.id === ticketId ? { ...t, status } : t
-        )
-      );
-    };
-
-    socket.on("ticket:newMessage",    onNewMessage);
-    socket.on("ticket:liveMessage",   onLiveMessage);
-    socket.on("ticket:statusChanged", onStatusChanged);
-    return () => {
-      socket.off("ticket:newMessage",    onNewMessage);
-      socket.off("ticket:liveMessage",   onLiveMessage);
-      socket.off("ticket:statusChanged", onStatusChanged);
-    };
-  }, [socket]);
 
   const handleCancel = () => {
     setForm(EMPTY_FORM);

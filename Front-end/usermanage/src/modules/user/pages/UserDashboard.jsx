@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
-import { useSocket } from "../../../context/SocketContext";
 import {
   apiUpdateUserProfile,
   apiChangePassword,
@@ -23,7 +22,6 @@ const UserDashboard = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { profile, setProfile, guardedCall } = useUserProfile();
-  const socket = useSocket();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const getActiveTab = () => {
@@ -65,7 +63,7 @@ const UserDashboard = () => {
     });
   };
 
-  // ── Broadcast notifications — loaded from DB, updated live via socket ───────
+  // ── Broadcast notifications — loaded from DB ─────────────────────────────────
   const [broadcastNotifs,   setBroadcastNotifs]   = useState([]);
   const [unreadNotifCount,  setUnreadNotifCount]  = useState(0);
   const [notifLoading,      setNotifLoading]      = useState(false);
@@ -96,49 +94,6 @@ const UserDashboard = () => {
   useEffect(() => {
     fetchUserNotifications(1);
   }, [fetchUserNotifications]);
-
-  // ── Socket listeners ────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!socket) return;
-
-    const onNewMessage = ({ ticketId }) => {
-      const isViewingThisTicket = window.location.pathname === `/tickets/${ticketId}`;
-      removeSeenTicket(ticketId);
-      if (!isViewingThisTicket) {
-        setUnreadCount((c) => c + 1);
-        toast.info(`Ticket #${ticketId}: new message arrived`, { autoClose: 5000 });
-      }
-      if (isViewingThisTicket) {
-        addSeenTicket(ticketId);
-      }
-    };
-
-    const onTicketStatus = ({ ticketId, status }) => {
-      toast.info(`Ticket #${ticketId} status changed to "${status}"`);
-    };
-
-    const onBroadcast = ({ id, title, body, sentAt, sentBy }) => {
-      toast.info(
-        <div>
-          <strong>{title}</strong>
-          <div style={{ fontSize: 13, marginTop: 4 }}>{body}</div>
-        </div>,
-        { autoClose: 8000 }
-      );
-      setBroadcastNotifs((prev) => [{ id, title, body, sentAt, sentBy, isRead: 0 }, ...prev].slice(0, 50));
-      setUnreadNotifCount((c) => c + 1);
-    };
-
-    socket.on("ticket:newMessage",    onNewMessage);
-    socket.on("ticket:statusChanged", onTicketStatus);
-    socket.on("notification:broadcast", onBroadcast);
-
-    return () => {
-      socket.off("ticket:newMessage",    onNewMessage);
-      socket.off("ticket:statusChanged", onTicketStatus);
-      socket.off("notification:broadcast", onBroadcast);
-    };
-  }, [socket]);
 
   // Clear notification badge when user opens the Notifications tab
   useEffect(() => {

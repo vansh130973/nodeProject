@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { apiAdminListTickets } from "../services/ticket.service";
 import { showApiError } from "../../../utils/api";
-import { useSocket } from "../../../context/SocketContext";
 
 const PAGE_OPTS = [5, 10, 25, 50];
 
@@ -45,7 +44,6 @@ const NewReplyBadge = () => (
 
 const AdminTicketsSection = ({ onUnreadChange, seenTicketIds = new Set() }) => {
   const navigate = useNavigate();
-  const socket   = useSocket();
 
   const [tickets,      setTickets]      = useState([]);
   const [pagination,   setPagination]   = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
@@ -84,36 +82,6 @@ const AdminTicketsSection = ({ onUnreadChange, seenTicketIds = new Set() }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Live socket update: update ticket row instantly on new user reply ──────
-  useEffect(() => {
-    if (!socket) return;
-
-    const onUserReply = ({ ticketId }) => {
-      setTickets((prev) =>
-        prev.map((t) =>
-          t.id === ticketId ? { ...t, status: "userReply" } : t
-        )
-      );
-    };
-
-    // When admin sends a reply (from another tab/admin), update status to adminReply
-    const onLiveMessage = ({ ticketId, senderType }) => {
-      if (senderType === "admin") {
-        setTickets((prev) =>
-          prev.map((t) =>
-            t.id === ticketId ? { ...t, status: "adminReply" } : t
-          )
-        );
-      }
-    };
-
-    socket.on("ticket:userReply",  onUserReply);
-    socket.on("ticket:liveMessage", onLiveMessage);
-    return () => {
-      socket.off("ticket:userReply",  onUserReply);
-      socket.off("ticket:liveMessage", onLiveMessage);
-    };
-  }, [socket]);
 
   const handleSearchChange = (e) => {
     const val = e.target.value;

@@ -3,7 +3,6 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import { AuthProvider } from "./context/AuthContext";
-import { SocketProvider } from "./context/SocketContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppNavbar from "./components/AppNavbar";
 
@@ -40,8 +39,7 @@ const AdminRoute = ({ children, masterOnly = false }) => (
 
 const App = () => (
   <AuthProvider>
-    <SocketProvider>
-    <BrowserRouter>
+<BrowserRouter>
       <ToastContainer
         position="top-right"
         autoClose={4000}
@@ -88,7 +86,6 @@ const App = () => (
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
-    </SocketProvider>
   </AuthProvider>
 );
 

@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
-import { useSocket } from "../../../context/SocketContext";
 import {
   apiAddAdmin,
   apiGetAllAdmins,
@@ -1318,7 +1317,6 @@ const AdminDashboard = () => {
   const { user } = useAuth();
   const navigate  = useNavigate();
   const { pathname } = useLocation();
-  const socket = useSocket();
   const {
     users, setUsers,
     pagination, fetchUsers,
@@ -1410,37 +1408,6 @@ const AdminDashboard = () => {
       return next;
     });
   };
-
-  // ── Socket listeners ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!socket) return;
-
-    const onUserReply = ({ ticketId }) => {
-      const isViewingThisTicket = window.location.pathname === `/admin/tickets/${ticketId}`;
-      removeAdminSeenTicket(ticketId);
-      if (!isViewingThisTicket) {
-        setUnreadCount((c) => c + 1);
-        toast.info(`Ticket #${ticketId}: new message arrived`, { autoClose: 5000 });
-      }
-      if (isViewingThisTicket) {
-        addAdminSeenTicket(ticketId);
-      }
-    };
-
-    const onUserStatus = ({ userId, status }) => {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, status } : u))
-      );
-    };
-
-    socket.on("ticket:userReply",    onUserReply);
-    socket.on("user:statusChanged",  onUserStatus);
-
-    return () => {
-      socket.off("ticket:userReply",   onUserReply);
-      socket.off("user:statusChanged", onUserStatus);
-    };
-  }, [socket, setUsers]);
 
   const [adminForm,       setAdminForm]       = useState(INITIAL_ADMIN_FORM);
   const [adminFormErrors, setAdminFormErrors] = useState({});
@@ -1574,7 +1541,7 @@ const AdminDashboard = () => {
   const handleForceLogoutUser = useCallback((userId, userName) => {
     setConfirmModal({
       show: true, title: "Force Logout", danger: true,
-      message: `Force logout "${userName}"? Their active session will be terminated immediately via socket.`,
+      message: `Force logout "${userName}"? Their active session will be terminated immediately.`,
       onConfirm: async () => {
         closeConfirm();
         try {

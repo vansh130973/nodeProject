@@ -3,7 +3,6 @@ import cors from "cors";
 import { createServer } from "http";
 import { authenticate } from "./middlewares/authMiddleware.js";
 import { sendSuccessResponse } from "./common/http/response.js";
-import { initSocket } from "./socket/socketManager.js";
 
 // ─── Route modules ────────────────────────────────────────────────────────────
 import userRoutes                                       from "./modules/user/user.routes.js";
@@ -38,7 +37,6 @@ app.use("/admin/tickets",       adminTicketRouter);         // /admin/tickets  /
 app.use("/admin/notifications", adminNotificationRouter);   // /admin/notifications  /admin/notifications/broadcast
 app.use("/admin",               adminRoutes);               // /admin/users  /admin/admins …
 
-// ─── Socket & DB init ─────────────────────────────────────────────────────────
-initSocket(httpServer);
+// ─── Server init ──────────────────────────────────────────────────────────────
 
 httpServer.listen(3200, () => console.log("Server running on port 3200"));

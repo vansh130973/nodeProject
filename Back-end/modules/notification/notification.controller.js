@@ -1,6 +1,5 @@
 import { sendSuccessResponse, sendErrorResponse } from "../../common/http/response.js";
 import { parsePage, parseLimit, buildPaginationMeta } from "../../common/http/pagination.js";
-import { emitBroadcastNotification } from "../../socket/socketManager.js";
 import {
   insertNotification,
   getNotificationsForUser,
@@ -9,13 +8,6 @@ import {
   markAllNotificationsRead,
   getUnreadNotificationCount,
 } from "./models/notification.model.js";
-
-/**
- * Wraps a socket emit call so a socket error never fails the HTTP response.
- */
-const safeNotify = (fn) => {
-  try { fn(); } catch (e) { console.error("[socket] notify error:", e?.message || e); }
-};
 
 /**
  * GET /notifications?page=1&limit=20
@@ -114,8 +106,7 @@ export const listNotificationsAdmin = async (req, res) => {
 /**
  * POST /admin/notifications/broadcast
  * Persists a broadcast notification to the DB, then pushes it live to all
- * connected users via the "notifications:broadcast" socket room.
- * safeNotify ensures a socket error never fails the HTTP response.
+ * connected users.
  *
  * @param {object} req HTTP request — body: { title, body }
  * @param {object} res HTTP response
@@ -138,10 +129,6 @@ export const sendBroadcastNotification = async (req, res) => {
       sentAt: new Date().toISOString(),
       sentBy,
     };
-
-    // Push to the "notifications:broadcast" room — all connected users are in this room.
-    // safeNotify ensures a socket error never fails the HTTP response.
-    safeNotify(() => emitBroadcastNotification(payload));
 
     return sendSuccessResponse(res, "Broadcast notification sent", { notification: payload });
   } catch (error) {
