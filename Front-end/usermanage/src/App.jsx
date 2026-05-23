@@ -3,6 +3,7 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import { AuthProvider } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";  // ← new
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppNavbar from "./components/AppNavbar";
 
@@ -39,53 +40,55 @@ const AdminRoute = ({ children, masterOnly = false }) => (
 
 const App = () => (
   <AuthProvider>
-<BrowserRouter>
-      <ToastContainer
-        position="top-right"
-        autoClose={4000}
-        hideProgressBar={false}
-        newestOnTop
-        closeOnClick
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
+    <NotificationProvider>        {/* ← wraps everything so Navbar + Dashboard share state */}
+      <BrowserRouter>
+        <ToastContainer
+          position="top-right"
+          autoClose={4000}
+          hideProgressBar={false}
+          newestOnTop
+          closeOnClick
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="colored"
+        />
 
-      <Routes>
-        {/* Public */}
-        <Route path="/login"            element={<Layout><LoginPage /></Layout>} />
-        <Route path="/register"         element={<Layout><RegisterPage /></Layout>} />
-        <Route path="/forgot-password"  element={<Layout><ForgotPasswordPage /></Layout>} />
-        <Route path="/admin/login"      element={<Layout><AdminLoginPage /></Layout>} />
-        <Route path="/unauthorized"     element={<Layout><Unauthorized /></Layout>} />
+        <Routes>
+          {/* Public */}
+          <Route path="/login"            element={<Layout><LoginPage /></Layout>} />
+          <Route path="/register"         element={<Layout><RegisterPage /></Layout>} />
+          <Route path="/forgot-password"  element={<Layout><ForgotPasswordPage /></Layout>} />
+          <Route path="/admin/login"      element={<Layout><AdminLoginPage /></Layout>} />
+          <Route path="/unauthorized"     element={<Layout><Unauthorized /></Layout>} />
 
-        {/* User routes */}
-        <Route path="/dashboard"        element={<UserRoute><UserDashboard /></UserRoute>} />
-        <Route path="/edit-profile"     element={<UserRoute><UserDashboard /></UserRoute>} />
-        <Route path="/change-password"  element={<UserRoute><UserDashboard /></UserRoute>} />
-        <Route path="/tickets"          element={<UserRoute><UserDashboard /></UserRoute>} />
-        <Route path="/tickets/:id"      element={<UserRoute><UserDashboard /></UserRoute>} />
-        <Route path="/notifications"    element={<UserRoute><UserDashboard /></UserRoute>} />
+          {/* User routes */}
+          <Route path="/dashboard"        element={<UserRoute><UserDashboard /></UserRoute>} />
+          <Route path="/edit-profile"     element={<UserRoute><UserDashboard /></UserRoute>} />
+          <Route path="/change-password"  element={<UserRoute><UserDashboard /></UserRoute>} />
+          <Route path="/tickets"          element={<UserRoute><UserDashboard /></UserRoute>} />
+          <Route path="/tickets/:id"      element={<UserRoute><UserDashboard /></UserRoute>} />
+          <Route path="/notifications"    element={<UserRoute><UserDashboard /></UserRoute>} />
 
-        {/* Admin routes (any admin; master = userName "admin") */}
-        <Route path="/admin/dashboard"       element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/tickets"         element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/tickets/:id"     element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/users"           element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/profile"         element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/change-password" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          {/* Admin routes */}
+          <Route path="/admin/dashboard"       element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/tickets"         element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/tickets/:id"     element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/users"           element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/profile"         element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/change-password" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
 
-        {/* Master admin only (userName "admin") */}
-        <Route path="/admin/admins"          element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/add-admin"       element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/modules"         element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/roles"           element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/notifications"   element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
+          {/* Master admin only */}
+          <Route path="/admin/admins"          element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/add-admin"       element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/modules"         element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/roles"           element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin/notifications"   element={<AdminRoute masterOnly><AdminDashboard /></AdminRoute>} />
 
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </NotificationProvider>
   </AuthProvider>
 );
 

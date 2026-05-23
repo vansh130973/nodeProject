@@ -13,12 +13,15 @@ import { validateEditProfileForm, validateChangePasswordForm } from "../validati
 import { showApiError } from "../../../utils/api";
 import useUserProfile from "../hooks/useUserProfile";
 import InputField from "../../../components/InputField";
+import { connectSocket, onSocket, offSocket, SOCKET_EVENTS } from "../../../utils/socket";
+import { useNotification } from "../../../context/NotificationContext";
 import UserTicketsSection from "../../ticket/components/UserTicketsSection";
 import UserTicketDetailSection from "../../ticket/components/UserTicketDetailSection";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 const UserDashboard = () => {
   const { logout, updateUser } = useAuth();
+  const { incrementNotifCount, resetNotifCount, syncNotifCount } = useNotification();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { profile, setProfile, guardedCall } = useUserProfile();
@@ -80,6 +83,7 @@ const UserDashboard = () => {
       const data = await apiGetNotifications(page);
       setBroadcastNotifs(data.notifications ?? []);
       setUnreadNotifCount(data.unreadCount ?? 0);
+      syncNotifCount(data.unreadCount ?? 0);  // ← keep Navbar badge in sync
       setNotifPage(data.pagination.page);
       setNotifTotalPages(data.pagination.totalPages);
       setNotifTotal(data.pagination.total);
@@ -99,6 +103,7 @@ const UserDashboard = () => {
   useEffect(() => {
     if (activeTab === "notifications" && unreadNotifCount > 0) {
       setUnreadNotifCount(0);
+      resetNotifCount();   // ← clear Navbar bell badge too
       setBroadcastNotifs((prev) => prev.map((n) => ({ ...n, isRead: 1 })));
       apiReadAllNotifications().catch(() => {});
     }
@@ -115,6 +120,65 @@ const UserDashboard = () => {
     addSeenTicket(ticketId);
     setUnreadCount((prev) => Math.max(0, prev - 1));
   };
+
+  // ── Real-time badge: bump whenever admin sends a message (any tab) ────────
+  useEffect(() => {
+    connectSocket();
+
+    // Admin replied → mark ticket as unseen again so badge shows, then bump count
+    const onMsg = (payload) => {
+      const ticketId = Number(payload.ticketId);
+      // Always remove from seen so the NewReplyBadge re-appears on the list row
+      removeSeenTicket(ticketId);
+      setUnreadCount((prev) => prev + 1);
+    };
+
+    // Status changed to "open" means user opened the ticket → clear badge for it
+    const onStatus = (payload) => {
+      if (payload.status === "open") {
+        const ticketId = Number(payload.ticketId);
+        addSeenTicket(ticketId);
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      }
+    };
+
+    // Broadcast notification from master admin → bump badge + prepend to list
+    const onBroadcast = (notification) => {
+      // Only update badge if user is NOT already on the notifications tab
+      setUnreadNotifCount((prev) => {
+        const isOnNotifTab = window.location.pathname === "/notifications";
+        return isOnNotifTab ? prev : prev + 1;
+      });
+      if (window.location.pathname !== "/notifications") {
+        incrementNotifCount();  // ← update Navbar bell badge
+      }
+      // Prepend the new notification to page 1 of the list (only if on page 1)
+      setBroadcastNotifs((prev) => {
+        if (notifPage !== 1) return prev; // don't mess up pagination
+        const newEntry = {
+          id:     notification.id,
+          title:  notification.title,
+          body:   notification.body,
+          sentAt: notification.sentAt,
+          sentBy: notification.sentBy,
+          isRead: 0,
+        };
+        return [newEntry, ...prev];
+      });
+      setNotifTotal((prev) => prev + 1);
+    };
+
+    onSocket(SOCKET_EVENTS.TICKET_MSG,    onMsg);
+    onSocket(SOCKET_EVENTS.TICKET_STATUS, onStatus);
+    onSocket(SOCKET_EVENTS.BROADCAST,     onBroadcast);
+
+    return () => {
+      offSocket(SOCKET_EVENTS.TICKET_MSG,    onMsg);
+      offSocket(SOCKET_EVENTS.TICKET_STATUS, onStatus);
+      offSocket(SOCKET_EVENTS.BROADCAST,     onBroadcast);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seenTicketIds]);
 
   const [editForm, setEditForm] = useState({ firstName: "", lastName: "", phone: "", gender: "" });
   const [editErrors, setEditErrors] = useState({});

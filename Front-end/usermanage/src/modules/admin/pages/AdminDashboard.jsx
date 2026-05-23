@@ -38,6 +38,7 @@ import useAdminData from "../hooks/useAdminData";
 import InputField from "../../../components/InputField";
 import AdminTicketsSection from "../../ticket/components/AdminTicketsSection";
 import AdminTicketDetailSection from "../../ticket/components/AdminTicketDetailSection";
+import { connectSocket, onSocket, offSocket, SOCKET_EVENTS } from "../../../utils/socket";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 const INITIAL_ADMIN_FORM = { userName: "", email: "", phone: "", roleId: "", password: "", conformPassword: "" };
@@ -684,29 +685,27 @@ const ModulesTab = () => {
         </button>
       </div>
 
-      <div className="mb-3" style={{ maxWidth: 300 }}>
-        <input id="mod_search" name="moduleSearch" autoComplete="off"
-          className="form-control" placeholder="Search modules..."
-          value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-      <div className="mb-3 d-flex align-items-center gap-2" style={{ maxWidth: 220 }}>
-        <label htmlFor="modules_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
-        <select
-          id="modules_page_size"
-          className="form-select form-select-sm"
-          value={String(pageSize)}
-          onChange={(e) => {
-            const next = e.target.value === "all" ? "all" : Number(e.target.value);
-            setPageSize(next);
-            setPage(1);
-          }}
-        >
-          {PAGE_SIZE_OPTIONS.map((size) => (
-            <option key={size} value={size}>
-              {size === "all" ? "All" : size}
-            </option>
-          ))}
-        </select>
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <div className="d-flex align-items-center gap-2" style={{ width: "220px" }}>
+          <label htmlFor="modules_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
+          <select id="modules_page_size" className="form-select form-select-sm" value={String(pageSize)}
+            onChange={(e) => {
+              const next = e.target.value === "all" ? "all" : Number(e.target.value);
+              setPageSize(next);
+              setPage(1);
+            }}>
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size === "all" ? "All" : size}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="d-flex align-items-center gap-2" style={{ width: "300px" }}>
+          <label htmlFor="mod_search" className="form-label fw-semibold mb-0 small text-muted">Search</label>
+          <input id="mod_search" name="moduleSearch" autoComplete="off" className="form-control"
+            placeholder="Search modules..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
       </div>
 
       <div className="card border-0 shadow-sm">
@@ -1041,7 +1040,7 @@ const RolesTab = () => {
 
   return (
     <>
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
           <h5 className="fw-bold mb-0">Roles</h5>
           <small className="text-muted">Create roles and assign module-level permissions</small>
@@ -1051,29 +1050,35 @@ const RolesTab = () => {
         </button>
       </div>
 
-      <div className="mb-3" style={{ maxWidth: 300 }}>
-        <input id="role_search" name="roleSearch" autoComplete="off"
-          className="form-control" placeholder="Search roles..."
-          value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-      <div className="mb-3 d-flex align-items-center gap-2" style={{ maxWidth: 220 }}>
-        <label htmlFor="roles_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
-        <select
-          id="roles_page_size"
-          className="form-select form-select-sm"
-          value={String(pageSize)}
-          onChange={(e) => {
-            const next = e.target.value === "all" ? "all" : Number(e.target.value);
-            setPageSize(next);
-            setPage(1);
-          }}
-        >
-          {PAGE_SIZE_OPTIONS.map((size) => (
-            <option key={size} value={size}>
-              {size === "all" ? "All" : size}
-            </option>
-          ))}
-        </select>
+      <div className="mb-3 d-flex flex-wrap justify-content-between align-items-end gap-3">
+        <div className="d-flex align-items-center gap-2" style={{ width: "220px" }} >
+          <label htmlFor="roles_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
+          <select id="roles_page_size" className="form-select form-select-sm" value={String(pageSize)}
+            onChange={(e) => {
+              const next =
+                e.target.value === "all"
+                  ? "all"
+                  : Number(e.target.value);
+
+              setPageSize(next);
+              setPage(1);
+            }} >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size === "all" ? "All" : size}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="d-flex align-items-center gap-2" style={{ width: "300px" }}>
+          <label htmlFor="role_search" className="form-label fw-semibold mb-0 small text-muted">Search</label>
+          <input id="role_search" name="roleSearch" autoComplete="off" className="form-control"
+            placeholder="Search roles..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
       <div className="card border-0 shadow-sm">
@@ -1124,7 +1129,6 @@ const RolesTab = () => {
             </tbody>
           </table>
         </div>
-        <div className="card-footer text-muted small bg-white">{filtered.length} role{filtered.length !== 1 ? "s" : ""}</div>
       </div>
       {totalPages > 1 && (
         <Pagination pagination={{ page: safePage, totalPages }} onPageChange={setPage} />
@@ -1641,6 +1645,28 @@ const AdminDashboard = () => {
     addAdminSeenTicket(ticketId);
     setUnreadCount((prev) => Math.max(0, prev - 1));
   };
+
+  // ─── Real-time badge: bump unreadCount on new ticket or user reply ───────────
+  // Mounted at the dashboard level so the badge updates regardless of active tab.
+  useEffect(() => {
+    connectSocket();
+
+    const onNew = () => {
+      setUnreadCount((prev) => prev + 1);
+    };
+
+    const onCount = () => {
+      setUnreadCount((prev) => prev + 1);
+    };
+
+    onSocket(SOCKET_EVENTS.TICKET_NEW,   onNew);
+    onSocket(SOCKET_EVENTS.TICKET_COUNT, onCount);
+
+    return () => {
+      offSocket(SOCKET_EVENTS.TICKET_NEW,   onNew);
+      offSocket(SOCKET_EVENTS.TICKET_COUNT, onCount);
+    };
+  }, []);
 
   // ─── Sidebar ────────────────────────────────────────────────────────────────
   const NAV_ITEMS = [

@@ -22,6 +22,7 @@ import {
 } from "../helpers/ticket.helper.js";
 import { buildFileUrl } from "../../../common/url/file-url.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../common/http/response.js";
+import { emitSocket, SOCKET_EVENTS } from "../../../socket.js";
 
 /**
  * Append a full public URL to a ticket's file path.
@@ -104,6 +105,14 @@ export const createTicket = async (req, res) => {
     await safeNotify(() => notifyUserTicketCreated({ toEmail: email, ticketId, subject }));
     await safeNotify(() => notifySupportNewTicket({ userEmail: email, userName, ticketId, subject }));
 
+    // Notify master admin of the new ticket in real time
+    emitSocket(SOCKET_EVENTS.TICKET_NEW, {
+      ticketId,
+      userId,
+      subject,
+      userName,
+    });
+
     return sendSuccessResponse(res, "Ticket created", {
       ticket: formatTicketRow({ ticketId, userId, subject, description, file: fullTicketFilePath }),
     }, 201);
@@ -149,6 +158,12 @@ export const getTicketDetailUser = async (req, res) => {
     if (ticket.status === "adminReply") {
       await updateTicketStatus(ticketId, "open");
       ticket.status = "open";
+      // Notify master admin that user has read the reply → status is now open
+      emitSocket(SOCKET_EVENTS.TICKET_STATUS, {
+        ownerUserId: req.user.id,
+        ticketId,
+        status: "open",
+      });
     }
 
     const messages = await getTicketMessages(ticketId);
@@ -199,6 +214,17 @@ export const addMessageUser = async (req, res) => {
       fromLabel: `User ${owner?.userName ?? req.user.id}`,
     }));
 
+    // Real-time: push the new message and bump admin unread count
+    emitSocket(SOCKET_EVENTS.TICKET_MSG, {
+      ownerUserId: req.user.id,
+      ticketId,
+      message:     text,
+    });
+    emitSocket(SOCKET_EVENTS.TICKET_COUNT, {
+      ownerUserId: req.user.id,
+      ticketId,
+    });
+
     const messages = await getTicketMessages(ticketId);
     return sendSuccessResponse(res, "Message sent", { messages: formatMessages(messages) });
   } catch (error) {
@@ -223,6 +249,14 @@ export const patchTicketStatusUser = async (req, res) => {
 
     await updateTicketStatus(ticketId, req.body.status);
     const updated = await findTicketForUser(ticketId, req.user.id);
+
+    // Real-time: inform master admin of the status change
+    emitSocket(SOCKET_EVENTS.TICKET_STATUS, {
+      ownerUserId: req.user.id,
+      ticketId,
+      status:      req.body.status,
+    });
+
     return sendSuccessResponse(res, "Status updated", { ticket: formatTicketRow(updated) });
   } catch (error) {
     console.error("patchTicketStatusUser error:", error);
@@ -282,6 +316,12 @@ export const getTicketDetailAdmin = async (req, res) => {
     if (ticket.status === "userReply") {
       await updateTicketStatus(ticketId, "open");
       ticket.status = "open";
+      // Notify the ticket owner that admin has read the reply → status is now open
+      emitSocket(SOCKET_EVENTS.TICKET_STATUS, {
+        ownerUserId: ticket.userId,
+        ticketId,
+        status: "open",
+      });
     }
 
     const messages            = await getTicketMessages(ticketId);
@@ -333,6 +373,17 @@ export const addMessageAdmin = async (req, res) => {
       fromLabel: `Support (${adminRow?.userName ?? "admin"})`,
     }));
 
+    // Real-time: push the admin reply directly to the ticket owner
+    emitSocket(SOCKET_EVENTS.TICKET_MSG, {
+      ownerUserId: ticket.userId,
+      ticketId,
+      message:     text,
+    });
+    emitSocket(SOCKET_EVENTS.TICKET_COUNT, {
+      ownerUserId: ticket.userId,
+      ticketId,
+    });
+
     const messages = await getTicketMessages(ticketId);
     return sendSuccessResponse(res, "Message sent", { messages: formatMessages(messages) });
   } catch (error) {
@@ -358,6 +409,14 @@ export const patchTicketStatusAdmin = async (req, res) => {
     await updateTicketStatus(ticketId, req.body.status);
     const updated             = await findTicketWithOwner(ticketId);
     const { ownerEmail, ...rest } = updated;
+
+    // Real-time: inform the ticket owner of the status change
+    emitSocket(SOCKET_EVENTS.TICKET_STATUS, {
+      ownerUserId: updated.userId,
+      ticketId,
+      status:      req.body.status,
+    });
+
     return sendSuccessResponse(res, "Status updated", {
       ticket: { ...formatTicketRow(rest), owner: buildTicketOwner({ ...updated, ownerEmail }) },
     });

@@ -7,6 +7,13 @@ import {
   apiAdminUpdateTicketStatus,
 } from "../services/ticket.service";
 import { showApiError } from "../../../utils/api";
+import {
+  connectSocket,
+  disconnectSocket,
+  onSocket,
+  offSocket,
+  SOCKET_EVENTS,
+} from "../../../utils/socket";
 
 const STATUS_META = {
   open:{ cls:"bg-success",label:"Open" },
@@ -40,14 +47,14 @@ const AdminTicketDetailSection = ({ onTicketViewed, canEdit = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const bottomRef = useRef(null);
-  const fileRef   = useRef(null);
+  const fileRef = useRef(null);
 
-  const [ticket,         setTicket]         = useState(null);
-  const [messages,       setMessages]       = useState([]);
-  const [loading,        setLoading]        = useState(true);
-  const [reply,          setReply]          = useState("");
-  const [file,           setFile]           = useState(null);
-  const [sending,        setSending]        = useState(false);
+  const [ticket, setTicket] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [reply, setReply] = useState("");
+  const [file, setFile] = useState(null);
+  const [sending, setSending] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
 
   const load = async () => {
@@ -69,7 +76,32 @@ const AdminTicketDetailSection = ({ onTicketViewed, canEdit = false }) => {
 
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Join ticket room for live 1-to-1 messages ────────────────────────────
+  // ── Real-time socket listeners (master admin only) ───────────────────────
+  useEffect(() => {
+    const ticketIdNum = Number(id);
+
+    connectSocket();
+
+    // User sent a new message — reload conversation
+    const onMsg = (payload) => {
+      if (Number(payload.ticketId) !== ticketIdNum) return;
+      load();
+    };
+
+    // User (or system) changed the ticket status
+    const onStatus = (payload) => {
+      if (Number(payload.ticketId) !== ticketIdNum) return;
+      setTicket((prev) => prev ? { ...prev, status: payload.status } : prev);
+    };
+
+    onSocket(SOCKET_EVENTS.TICKET_MSG,    onMsg);
+    onSocket(SOCKET_EVENTS.TICKET_STATUS, onStatus);
+
+    return () => {
+      offSocket(SOCKET_EVENTS.TICKET_MSG,    onMsg);
+      offSocket(SOCKET_EVENTS.TICKET_STATUS, onStatus);
+    };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

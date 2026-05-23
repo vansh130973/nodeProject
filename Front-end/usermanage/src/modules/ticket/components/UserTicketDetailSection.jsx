@@ -7,6 +7,13 @@ import {
   apiUpdateTicketStatusUser,
 } from "../services/ticket.service";
 import { showApiError } from "../../../utils/api";
+import {
+  connectSocket,
+  disconnectSocket,
+  onSocket,
+  offSocket,
+  SOCKET_EVENTS,
+} from "../../../utils/socket";
 
 const STATUS_META = {
   open:{cls:"bg-success",label: "Open" },
@@ -56,9 +63,9 @@ const UserTicketDetailSection = ({ onTicketViewed }) => {
       const data = await apiGetTicketDetailUser(id);
       setTicket(data.ticket);
       setMessages(data.messages ?? []);
-      if (data.ticket?.status === "adminReply") {
-        onTicketViewed?.(Number(id));
-      }
+      // The server resets adminReply → open when user opens the ticket.
+      // Call onTicketViewed so the parent clears the sidebar badge.
+      onTicketViewed?.(Number(id));
     } catch (err) {
       showApiError(err, (m) => toast.error(m));
       navigate("/tickets");
@@ -69,7 +76,37 @@ const UserTicketDetailSection = ({ onTicketViewed }) => {
 
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Join ticket room for live 1-to-1 messages ────────────────────────────
+  // ── Real-time socket listeners ───────────────────────────────────────────
+  useEffect(() => {
+    const ticketIdNum = Number(id);
+
+    connectSocket();
+
+    // Admin sent a new message — reload conversation + messages, then clear badge
+    const onMsg = (payload) => {
+      if (Number(payload.ticketId) !== ticketIdNum) return;
+      load();
+    };
+
+    // Status changed (e.g. admin/system set open, closed, etc.)
+    const onStatus = (payload) => {
+      if (Number(payload.ticketId) !== ticketIdNum) return;
+      setTicket((prev) => prev ? { ...prev, status: payload.status } : prev);
+      // If status is now "open" it means the other party opened the ticket — no toast needed
+      // Only show a toast for meaningful status transitions
+      if (payload.status !== "open") {
+        toast.info(`Ticket status changed to: ${payload.status}`);
+      }
+    };
+
+    onSocket(SOCKET_EVENTS.TICKET_MSG,    onMsg);
+    onSocket(SOCKET_EVENTS.TICKET_STATUS, onStatus);
+
+    return () => {
+      offSocket(SOCKET_EVENTS.TICKET_MSG,    onMsg);
+      offSocket(SOCKET_EVENTS.TICKET_STATUS, onStatus);
+    };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

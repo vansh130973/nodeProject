@@ -8,10 +8,11 @@ import {
   markAllNotificationsRead,
   getUnreadNotificationCount,
 } from "./models/notification.model.js";
+import { emitSocket, SOCKET_EVENTS } from "../../socket.js";
 
 /**
  * GET /notifications?page=1&limit=20
- * Returns a paginated list of broadcast notifications with per-row isRead flag,
+ * Returns paginated broadcast notifications with per-row isRead flag,
  * plus the current unread badge count for the sidebar.
  *
  * @param {object} req HTTP request — query: page, limit (authenticated user)
@@ -129,6 +130,9 @@ export const sendBroadcastNotification = async (req, res) => {
       sentAt: new Date().toISOString(),
       sentBy,
     };
+
+    // Push live to every connected user + the admin socket itself
+    emitSocket(SOCKET_EVENTS.BROADCAST, payload);
 
     return sendSuccessResponse(res, "Broadcast notification sent", { notification: payload });
   } catch (error) {

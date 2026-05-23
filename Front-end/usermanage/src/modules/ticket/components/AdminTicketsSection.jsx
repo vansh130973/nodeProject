@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { apiAdminListTickets } from "../services/ticket.service";
 import { showApiError } from "../../../utils/api";
+import { connectSocket, onSocket, offSocket, SOCKET_EVENTS } from "../../../utils/socket";
 
 const PAGE_OPTS = [5, 10, 25, 50];
 
@@ -81,6 +82,30 @@ const AdminTicketsSection = ({ onUnreadChange, seenTicketIds = new Set() }) => {
     load(1, pagination.limit, filterStatus, searchQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Real-time: refresh list when a new ticket arrives or a user replies ──
+  useEffect(() => {
+    connectSocket();
+
+    const onNew = () => {
+      load(1, pagination.limit, filterStatus, searchQuery);
+      toast.info("New support ticket received");
+    };
+
+    const onCount = () => {
+      // Reload the first page to refresh unread badges
+      load(1, pagination.limit, filterStatus, searchQuery);
+    };
+
+    onSocket(SOCKET_EVENTS.TICKET_NEW,   onNew);
+    onSocket(SOCKET_EVENTS.TICKET_COUNT, onCount);
+
+    return () => {
+      offSocket(SOCKET_EVENTS.TICKET_NEW,   onNew);
+      offSocket(SOCKET_EVENTS.TICKET_COUNT, onCount);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterStatus, searchQuery]);
 
 
   const handleSearchChange = (e) => {

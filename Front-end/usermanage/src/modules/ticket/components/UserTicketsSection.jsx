@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { apiGetMyTickets, apiCreateTicket } from "../services/ticket.service";
 import { showApiError } from "../../../utils/api";
 import InputField from "../../../components/InputField";
+import { connectSocket, onSocket, offSocket, SOCKET_EVENTS } from "../../../utils/socket";
 
 const STATUS_META = {
   open:       { cls: "bg-success",        label: "Open" },
@@ -70,6 +71,40 @@ const UserTicketsSection = ({ onTicketsLoaded, seenTicketIds = new Set() }) => {
   };
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Real-time: update ticket rows without reload ──────────────────────────
+  useEffect(() => {
+    connectSocket();
+
+    // Admin replied → mark that ticket as adminReply in the list immediately
+    const onMsg = (payload) => {
+      const ticketId = Number(payload.ticketId);
+      setTickets((prev) =>
+        prev.map((t) => t.id === ticketId ? { ...t, status: "adminReply" } : t)
+      );
+    };
+
+    // Any status change → update the row badge/status in-place
+    const onStatus = (payload) => {
+      const ticketId = Number(payload.ticketId);
+      setTickets((prev) =>
+        prev.map((t) => t.id === ticketId ? { ...t, status: payload.status } : t)
+      );
+      // Re-compute unread count from updated list
+      setTickets((prev) => {
+        onTicketsLoaded?.(prev);
+        return prev;
+      });
+    };
+
+    onSocket(SOCKET_EVENTS.TICKET_MSG,    onMsg);
+    onSocket(SOCKET_EVENTS.TICKET_STATUS, onStatus);
+
+    return () => {
+      offSocket(SOCKET_EVENTS.TICKET_MSG,    onMsg);
+      offSocket(SOCKET_EVENTS.TICKET_STATUS, onStatus);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const handleCancel = () => {
