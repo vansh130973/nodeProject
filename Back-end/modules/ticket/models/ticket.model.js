@@ -11,8 +11,7 @@ import { parseLimit } from "../../../common/http/pagination.js";
  */
 export const insertTicket = async (userId, subject, description) => {
   const [result] = await db.query(
-    `INSERT INTO tickets (userId, subject, description)
-     VALUES (?, ?, ?)`,
+    `INSERT INTO tickets (userId, subject, description) VALUES (?, ?, ?)`,
     [userId, subject, description]
   );
   return result.insertId;
@@ -112,120 +111,79 @@ export const listTicketsForUser = async (userId) => {
  * @returns {Promise<{ tickets: object[], pagination: object }>}
  */
 export const listAllTickets = async ({ page = 1, limit = 20, status = "", search = "" }) => {
-  const parsedLimit = parseLimit(limit, 20);
-  const numericLimit = typeof parsedLimit === "number" ? parsedLimit : 100;
-  const offset = (page - 1) * numericLimit;
+  const parsedLimit  = typeof parseLimit(limit, 20) === "number" ? parseLimit(limit, 20) : 100;
+  const offset = (page - 1) * parsedLimit;
   const conditions = [];
   const params = [];
 
-  if (status && status !== "all") {
-    conditions.push("t.status = ?");
-    params.push(status);
-  }
+  if (status && status !== "all") { conditions.push("t.status = ?");                          params.push(status); }
+  if (search?.trim()) { conditions.push("(t.subject LIKE ? OR t.description LIKE ?)"); const l = `%${search.trim()}%`; params.push(l, l); }
 
-  const q = search?.trim();
-  if (q) {
-    conditions.push("(t.subject LIKE ? OR t.description LIKE ?)");
-    const like = `%${q}%`;
-    params.push(like, like);
-  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
-  const [rows] = await db.query(
-    `SELECT t.id, t.subject, t.status, t.createdAt, t.userId,
-            u.firstName, u.lastName, u.userName, u.email
-     FROM tickets t
-     JOIN users u ON u.id = t.userId
-     ${whereClause}
-     ORDER BY t.createdAt DESC
-     LIMIT ? OFFSET ?`,
-    [...params, numericLimit, offset]
-  );
-
-  const [[countRow]] = await db.query(
-    `SELECT COUNT(*) AS total FROM tickets t ${whereClause}`,
-    params
-  );
+  const [[{ total }], [rows]] = await Promise.all([
+    db.query(`SELECT COUNT(*) AS total FROM tickets t ${where}`, params),
+    db.query(
+      `SELECT t.id, t.subject, t.status, t.createdAt, t.userId,
+              u.firstName, u.lastName, u.userName, u.email
+       FROM tickets t JOIN users u ON u.id = t.userId
+       ${where} ORDER BY t.createdAt DESC LIMIT ? OFFSET ?`,
+      [...params, parsedLimit, offset]
+    ),
+  ]);
 
   return {
     tickets: rows,
     pagination: {
-      page: Number(page),
-      limit: numericLimit,
-      total: countRow?.total ?? 0,
-      totalPages: Math.ceil((countRow?.total ?? 0) / numericLimit) || 1,
+      page: Number(page), limit: parsedLimit, total,
+      totalPages: Math.ceil(total / parsedLimit) || 1,
     },
   };
 };
 
-/**
- * Get all messages for a ticket in chronological order (oldest first).
- *
- * @param {number} ticketId
- * @returns {Promise<object[]>} Array of message rows
- */
 export const getTicketMessages = async (ticketId) => {
   const [rows] = await db.query(
     `SELECT id, ticketId, senderId, senderType, message, file, createdAt
-     FROM ticketMessages
-     WHERE ticketId = ?
-     ORDER BY createdAt ASC`,
+     FROM ticketMessages WHERE ticketId = ? ORDER BY createdAt ASC`,
     [ticketId]
   );
   return rows;
 };
 
 /**
- * Insert a chat-style message under a ticket.
+ * Insert a message. If status is provided it is written into the row at
  *
  * @param {number}      ticketId
  * @param {number}      senderId   User or admin id
  * @param {"user"|"admin"} senderType
- * @param {string}      message    Message body (may be empty string if file-only)
- * @param {string|null} [filePath] Relative file path, or null
+ * @param {string}      message
+ * @param {string|null} filePath
+ * @param {string|null} status     Ticket status to stamp on the message row, or null
  * @returns {Promise<number>} Inserted message id
  */
-export const insertTicketMessage = async (ticketId, senderId, senderType, message, filePath = null) => {
-  const [result] = await db.query(
-    `INSERT INTO ticketMessages (ticketId, senderId, senderType, message, file)
-     VALUES (?, ?, ?, ?, ?)`,
-    [ticketId, senderId, senderType, message, filePath]
-  );
+export const insertTicketMessage = async (
+  ticketId, senderId, senderType, message, filePath = null, status = null
+) => {
+  const query  = `INSERT INTO ticketMessages (ticketId, senderId, senderType, message, file${status ? ", status" : ""}) VALUES (?, ?, ?, ?, ?${status ? ", ?" : ""})`;
+  const params = [ticketId, senderId, senderType, message, filePath];
+  if (status) params.push(status);
+  const [result] = await db.query(query, params);
   return result.insertId;
 };
 
 /**
- * Update the ticket status and refresh its updatedAt timestamp.
+ * Update a ticket's status and refresh updatedAt in one query.
+ * Pass status=null to only touch updatedAt (e.g. message on closed ticket).
  *
  * @param {number} ticketId
- * @param {string} status   New status value (e.g. "open", "closed", "adminReply", "userReply")
- * @returns {Promise<void>}
+ * @param {string|null}  status
  */
-export const updateTicketStatus = async (ticketId, status) => {
-  await db.query(
-    "UPDATE tickets SET status = ?, updatedAt = NOW() WHERE id = ?",
-    [status, ticketId]
-  );
+export const updateTicket = async (ticketId, status = null) => {
+  const query  = `UPDATE tickets SET ${status ? "status = ?, " : ""}updatedAt = NOW() WHERE id = ?`;
+  const params = status ? [status, ticketId] : [ticketId];
+  await db.query(query, params);
 };
 
-/**
- * Refresh a ticket's updatedAt timestamp without changing its status.
- * Used when a message is added to a closed ticket.
- *
- * @param {number} ticketId
- * @returns {Promise<void>}
- */
-export const touchTicket = async (ticketId) => {
-  await db.query("UPDATE tickets SET updatedAt = NOW() WHERE id = ?", [ticketId]);
-};
-
-/**
- * Count tickets that are waiting for an admin response (status = "userReply").
- * Used for the unread badge in the admin sidebar.
- *
- * @returns {Promise<number>}
- */
 export const getUnreadCount = async () => {
   const [[row]] = await db.query(
     "SELECT COUNT(*) AS total FROM tickets WHERE status = 'userReply'"

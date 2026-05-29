@@ -297,3 +297,45 @@ export const deleteOtp = async (userId) => {
     throw error;
   }
 };
+/**
+ * Given arrays of userNames + emails, return existing rows matching either.
+ * Used by bulk import to detect duplicates in one query.
+ */
+export const bulkFindExistingUsernamesAndEmails = async (userNames, emails) => {
+  if (!userNames.length && !emails.length) return [];
+  try {
+    const [rows] = await db.query(
+      `SELECT userName, email, isDeleted FROM users WHERE userName IN (?) OR email IN (?)`,
+      [userNames.length ? userNames : ["__none__"], emails.length ? emails : ["__none__"]]
+    );
+    return rows;
+  } catch (error) {
+    console.error("bulkFindExistingUsernamesAndEmails error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Insert multiple users one by one to capture each insertId.
+ * Returns { insertedIds: [{id, _remoteUrl}], affectedRows }
+ */
+export const bulkInsertUsers = async (users) => {
+  if (!users.length) return { insertedIds: [], affectedRows: 0 };
+  try {
+    const insertedIds = [];
+    for (const u of users) {
+      const [result] = await db.query(
+        `INSERT INTO users
+           (firstName, lastName, userName, password, email, phone, gender, profilePicture, status, isDeleted)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [u.firstName, u.lastName, u.userName, u.password, u.email,
+         u.phone, u.gender, u.profilePicture ?? null, u.status, u.isDeleted ?? 0]
+      );
+      insertedIds.push({ id: result.insertId, _remoteUrl: u._remoteUrl ?? null });
+    }
+    return { insertedIds, affectedRows: insertedIds.length };
+  } catch (error) {
+    console.error("bulkInsertUsers error:", error);
+    throw error;
+  }
+};

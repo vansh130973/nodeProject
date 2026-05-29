@@ -39,6 +39,8 @@ import useAdminData from "../hooks/useAdminData";
 import InputField from "../../../components/InputField";
 import AdminTicketsSection from "../../ticket/components/AdminTicketsSection";
 import AdminTicketDetailSection from "../../ticket/components/AdminTicketDetailSection";
+import BulkImportModal from "./BulkImportModal";
+import AddUserModal from "./AddUserModal";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 const INITIAL_ADMIN_FORM = { userName: "", email: "", phone: "", roleId: "", password: "", conformPassword: "" };
@@ -152,23 +154,85 @@ const fmtDate = (iso) =>
     ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
     : "—";
 
-// ─── Pagination (reusable) ────────────────────────────────────────────────────
+// ─── Pagination (reusable, with truncation) ────────────────────────────────────
 const Pagination = ({ pagination, onPageChange }) => {
   const { page, totalPages } = pagination;
   if (totalPages <= 1) return null;
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const pages = [];
+    pages.push(1); // always show first page
+
+    // define start and end of the middle block around the current page
+    let start = Math.max(2, page - 1);
+    let end = Math.min(totalPages - 1, page + 1);
+
+    if (page <= 3) {
+      start = 2;
+      end = Math.min(totalPages - 1, 4);
+    } else if (page >= totalPages - 2) {
+      start = Math.max(2, totalPages - 3);
+      end = totalPages - 1;
+    }
+
+    // insert ellipsis before middle block if needed
+    if (start > 2) {
+      pages.push('...');
+    }
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+
+    // insert ellipsis after middle block if needed
+    if (end < totalPages - 1) {
+      pages.push('...');
+    }
+
+    pages.push(totalPages); // always show last page
+    return pages;
+  };
+
+  const pageNumbers = getPageNumbers();
+
   return (
     <nav className="d-flex justify-content-end align-items-center gap-2 px-3 py-2 border-top bg-white">
-      <button className="btn btn-sm btn-outline-secondary"
-        disabled={page === 1} onClick={() => onPageChange(page - 1)}>
+      <button
+        className="btn btn-sm btn-outline-secondary"
+        disabled={page === 1}
+        onClick={() => onPageChange(page - 1)}
+      >
         <i className="bi bi-chevron-left" />
       </button>
-      {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-        <button key={p}
-          className={`btn btn-sm ${p === page ? "btn-warning fw-bold" : "btn-outline-secondary"}`}
-          onClick={() => onPageChange(p)}>{p}</button>
-      ))}
-      <button className="btn btn-sm btn-outline-secondary"
-        disabled={page === totalPages} onClick={() => onPageChange(page + 1)}>
+
+      {pageNumbers.map((p, idx) => {
+        if (p === '...') {
+          return (
+            <span key={`ellipsis-${idx}`} className="text-muted px-2" style={{ userSelect: 'none' }}>
+              …
+            </span>
+          );
+        }
+        return (
+          <button
+            key={p}
+            className={`btn btn-sm ${p === page ? 'btn-warning fw-bold' : 'btn-outline-secondary'}`}
+            onClick={() => onPageChange(p)}
+          >
+            {p}
+          </button>
+        );
+      })}
+
+      <button
+        className="btn btn-sm btn-outline-secondary"
+        disabled={page === totalPages}
+        onClick={() => onPageChange(page + 1)}
+      >
         <i className="bi bi-chevron-right" />
       </button>
     </nav>
@@ -677,7 +741,7 @@ const ModulesTab = () => {
     <>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h5 className="fw-bold mb-0">Modules</h5>
+          <h5 className="fw-bold mb-0"><i className="bi-grid me-2" /> Modules</h5>
           <small className="text-muted">Manage system modules and their availability</small>
         </div>
         <button className="btn btn-warning fw-semibold" onClick={() => setModal({ type: "add" })}>
@@ -685,29 +749,27 @@ const ModulesTab = () => {
         </button>
       </div>
 
-      <div className="mb-3" style={{ maxWidth: 300 }}>
-        <input id="mod_search" name="moduleSearch" autoComplete="off"
-          className="form-control" placeholder="Search modules..."
-          value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-      <div className="mb-3 d-flex align-items-center gap-2" style={{ maxWidth: 220 }}>
-        <label htmlFor="modules_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
-        <select
-          id="modules_page_size"
-          className="form-select form-select-sm"
-          value={String(pageSize)}
-          onChange={(e) => {
-            const next = e.target.value === "all" ? "all" : Number(e.target.value);
-            setPageSize(next);
-            setPage(1);
-          }}
-        >
-          {PAGE_SIZE_OPTIONS.map((size) => (
-            <option key={size} value={size}>
-              {size === "all" ? "All" : size}
-            </option>
-          ))}
-        </select>
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <div className="d-flex align-items-center gap-2" style={{ width: "220px" }}>
+          <label htmlFor="modules_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
+          <select id="modules_page_size" className="form-select form-select-sm" value={String(pageSize)}
+            onChange={(e) => {
+              const next = e.target.value === "all" ? "all" : Number(e.target.value);
+              setPageSize(next);
+              setPage(1);
+            }}>
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size === "all" ? "All" : size}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="d-flex align-items-center gap-2" style={{ width: "300px" }}>
+          <label htmlFor="mod_search" className="form-label fw-semibold mb-0 small text-muted">Search</label>
+          <input id="mod_search" name="moduleSearch" autoComplete="off" className="form-control"
+            placeholder="Search modules..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
       </div>
 
       <div className="card border-0 shadow-sm">
@@ -1044,7 +1106,7 @@ const RolesTab = () => {
     <>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h5 className="fw-bold mb-0">Roles</h5>
+          <h5 className="fw-bold mb-0"><i className="bi-person-badge me-2" /> Roles</h5>
           <small className="text-muted">Create roles and assign module-level permissions</small>
         </div>
         <button className="btn btn-warning fw-semibold" onClick={() => setModal({ type: "add" })}>
@@ -1052,29 +1114,35 @@ const RolesTab = () => {
         </button>
       </div>
 
-      <div className="mb-3" style={{ maxWidth: 300 }}>
-        <input id="role_search" name="roleSearch" autoComplete="off"
-          className="form-control" placeholder="Search roles..."
-          value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-      <div className="mb-3 d-flex align-items-center gap-2" style={{ maxWidth: 220 }}>
-        <label htmlFor="roles_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
-        <select
-          id="roles_page_size"
-          className="form-select form-select-sm"
-          value={String(pageSize)}
-          onChange={(e) => {
-            const next = e.target.value === "all" ? "all" : Number(e.target.value);
-            setPageSize(next);
-            setPage(1);
-          }}
-        >
-          {PAGE_SIZE_OPTIONS.map((size) => (
-            <option key={size} value={size}>
-              {size === "all" ? "All" : size}
-            </option>
-          ))}
-        </select>
+      <div className="mb-3 d-flex flex-wrap justify-content-between align-items-end gap-3">
+        <div className="d-flex align-items-center gap-2" style={{ width: "220px" }} >
+          <label htmlFor="roles_page_size" className="form-label fw-semibold mb-0 small text-muted">Rows</label>
+          <select id="roles_page_size" className="form-select form-select-sm" value={String(pageSize)}
+            onChange={(e) => {
+              const next =
+                e.target.value === "all"
+                  ? "all"
+                  : Number(e.target.value);
+
+              setPageSize(next);
+              setPage(1);
+            }} >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size === "all" ? "All" : size}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="d-flex align-items-center gap-2" style={{ width: "300px" }}>
+          <label htmlFor="role_search" className="form-label fw-semibold mb-0 small text-muted">Search</label>
+          <input id="role_search" name="roleSearch" autoComplete="off" className="form-control"
+            placeholder="Search roles..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
       <div className="card border-0 shadow-sm">
@@ -1328,6 +1396,7 @@ const AdminDashboard = () => {
   } = useAdminData();
   const permissionMap = useMemo(() => user?.permissions ?? {}, [user]);
   const [livePermissions, setLivePermissions] = useState(permissionMap);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
   const isMasterAdmin = user?.userName === "admin";
   useEffect(() => {
     setLivePermissions(permissionMap);
@@ -1758,7 +1827,7 @@ const AdminDashboard = () => {
         if (!canAccess("dashboard", "canView")) { navigate("/unauthorized"); return null; }
         return (
           <>
-            <h5 className="fw-bold mb-4">Dashboard</h5>
+            <h5 className="fw-bold mb-4"><i className="bi-speedometer2 me-2" /> Dashboard</h5>
             {!dashboardCounts ? (
               <div className="text-center py-5"><div className="spinner-border text-warning" /></div>
             ) : (
@@ -1795,19 +1864,29 @@ const AdminDashboard = () => {
         return (
           <>
             <div className="d-flex align-items-center justify-content-between mb-3">
-              <h5 className="fw-bold mb-0">All Users</h5>
+              <h5 className="fw-bold mb-0"><i className="bi-people me-2" /> All Users</h5>
               <div className="d-flex align-items-center gap-2">
                 <span className="badge bg-primary">{pagination.total} total</span>
+                {canAccess("users", "canAdd") && isMasterAdmin && (
+                  <BulkImportModal onImportDone={() => fetchUsers(1, pagination.limit, filterStatus === "all" ? "" : filterStatus, searchQuery)} />
+                )}
                 {canAccess("users", "canAdd") && (
                   <button
                     className="btn btn-warning btn-sm fw-semibold"
-                    onClick={() => navigate("/register")}
+                    onClick={() => setShowAddUserModal(true)}
                   >
                     <i className="bi bi-person-plus me-1" />
                     Add User
                   </button>
                 )}
               </div>
+              <AddUserModal
+                show={showAddUserModal}
+                onClose={() => setShowAddUserModal(false)}
+                onUserAdded={() => {
+                  fetchUsers(1, pagination.limit, filterStatus === "all" ? "" : filterStatus, searchQuery);
+                }}
+              />
             </div>
 
             <div className="card border-0 shadow-sm rounded-3 mb-3">
@@ -1951,7 +2030,7 @@ const AdminDashboard = () => {
         return (
           <>
             <div className="d-flex align-items-center justify-content-between mb-3">
-              <h5 className="fw-bold mb-0">All Admins</h5>
+              <h5 className="fw-bold mb-0"><i className="bi-shield-lock me-2" /> All Admins</h5>
               <div className="d-flex align-items-center gap-2">
                 <span className="badge bg-primary">{adminPagination.total} total</span>
                 <button className="btn btn-warning btn-sm fw-semibold"
@@ -2069,7 +2148,7 @@ const AdminDashboard = () => {
           <div className="row justify-content-center">
             <div className="col-md-8 col-lg-6">
               <div className="card border-0 shadow-sm rounded-3">
-                <h5 className="card-header p-4">Add New Admin</h5>
+                <h5 className="card-header p-4"><i className="bi-person-plus me-2" /> Add New Admin</h5>
                 <div className="card-body p-4">
                   <form onSubmit={handleAddAdmin} noValidate>
                     <InputField label="Username" id="aa_userName" name="userName" type="text"
@@ -2145,10 +2224,7 @@ const AdminDashboard = () => {
         if (!isMasterAdmin) { navigate("/unauthorized"); return null; }
         return (
           <>
-            <h5 className="fw-bold mb-4">
-              <i className="bi bi-megaphone me-2 text-warning" />
-              Notifications
-            </h5>
+            <h5 className="fw-bold mb-4"><i className="bi bi-megaphone me-2" /> Notifications</h5>
 
             <div className="card border-0 shadow-sm rounded-3 mb-4">
               <div className="card-body p-4">

@@ -43,12 +43,88 @@ const NewReplyBadge = () => (
   </>
 );
 
+// ─── Pagination (reusable, with truncation) ────────────────────────────────────
+const Pagination = ({ pagination, onPageChange }) => {
+  const { page, totalPages } = pagination;
+  if (totalPages <= 1) return null;
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const pages = [];
+    pages.push(1); // always first
+
+    let start = Math.max(2, page - 1);
+    let end = Math.min(totalPages - 1, page + 1);
+
+    if (page <= 3) {
+      start = 2;
+      end = Math.min(totalPages - 1, 4);
+    } else if (page >= totalPages - 2) {
+      start = Math.max(2, totalPages - 3);
+      end = totalPages - 1;
+    }
+
+    if (start > 2) pages.push('...');
+
+    for (let i = start; i <= end; i++) pages.push(i);
+
+    if (end < totalPages - 1) pages.push('...');
+
+    pages.push(totalPages); // always last
+    return pages;
+  };
+
+  const pageNumbers = getPageNumbers();
+
+  return (
+    <div className="d-flex align-items-center gap-2">
+      <button
+        className="btn btn-sm btn-outline-secondary"
+        disabled={page === 1}
+        onClick={() => onPageChange(page - 1)}
+      >
+        <i className="bi bi-chevron-left" />
+      </button>
+
+      {pageNumbers.map((p, idx) => {
+        if (p === '...') {
+          return (
+            <span key={`ellipsis-${idx}`} className="text-muted px-2" style={{ userSelect: 'none' }}>
+              …
+            </span>
+          );
+        }
+        return (
+          <button
+            key={p}
+            className={`btn btn-sm ${p === page ? 'btn-warning fw-bold' : 'btn-outline-secondary'}`}
+            onClick={() => onPageChange(p)}
+          >
+            {p}
+          </button>
+        );
+      })}
+
+      <button
+        className="btn btn-sm btn-outline-secondary"
+        disabled={page === totalPages}
+        onClick={() => onPageChange(page + 1)}
+      >
+        <i className="bi bi-chevron-right" />
+      </button>
+    </div>
+  );
+};
+
 const AdminTicketsSection = ({ onUnreadChange, seenTicketIds = new Set() }) => {
   const navigate = useNavigate();
   const socket   = useSocket();
 
   const [tickets,      setTickets]      = useState([]);
-  const [pagination,   setPagination]   = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
+  const [pagination,   setPagination]   = useState({ page: 1, limit: 5, total: 0, totalPages: 1 });
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchQuery,  setSearchQuery]  = useState("");
   const [loading,      setLoading]      = useState(true);
@@ -135,7 +211,7 @@ const AdminTicketsSection = ({ onUnreadChange, seenTicketIds = new Set() }) => {
   return (
     <>
       <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-        <h5 className="fw-bold mb-0">Tickets</h5>
+        <h5 className="fw-bold mb-0"><span className="bi-ticket-perforated me-2"></span> Tickets</h5>
         <span className="badge bg-primary">{pagination.total ?? 0} total</span>
       </div>
 
@@ -222,30 +298,12 @@ const AdminTicketsSection = ({ onUnreadChange, seenTicketIds = new Set() }) => {
                     value={pagination.limit}
                     onChange={(e) => handleLimitChange(Number(e.target.value))}
                   >
-                    {PAGE_OPTS.map((n) => <option key={n} value={n}>{n}</option>)}
+                    {PAGE_OPTS.map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
                   </select>
                 </div>
-                <div className="d-flex align-items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-secondary"
-                    disabled={pagination.page <= 1}
-                    onClick={() => handlePageChange(pagination.page - 1)}
-                  >
-                    <i className="bi bi-chevron-left" />
-                  </button>
-                  <span className="small text-muted">
-                    Page {pagination.page} / {pagination.totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-secondary"
-                    disabled={pagination.page >= pagination.totalPages}
-                    onClick={() => handlePageChange(pagination.page + 1)}
-                  >
-                    <i className="bi bi-chevron-right" />
-                  </button>
-                </div>
+                <Pagination pagination={pagination} onPageChange={handlePageChange} />
               </div>
             </>
           )}
