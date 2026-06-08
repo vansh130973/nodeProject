@@ -1,5 +1,5 @@
 import express from "express";
-import upload from "../../middlewares/upload.js";
+import upload, { uploadCSV } from "../../middlewares/upload.js";
 import { validate } from "../../middlewares/validate.js";
 import {
   authenticate,
@@ -28,7 +28,7 @@ import {
   editAdminProfile,
   changeAdminOwnPassword,
 } from "./controllers/admin.controller.js";
-import { bulkImportUsers } from "./controllers/bulkImport.controller.js";
+import { bulkImportUsers, validateCSV } from "./controllers/bulkImport.controller.js";
 import {
   addAdminSchema,
   loginAdminSchema,
@@ -59,7 +59,8 @@ router.put(    "/users/:id",        authenticate, requireAdmin, modulePermission
 router.patch(  "/users/:id/status", authenticate, requireAdmin, modulePermissionCheck(["users", "user"], "canEdit"),   validate(updateUserStatusSchema), changeUserStatus);
 router.delete( "/users/:id",        authenticate, requireAdmin, modulePermissionCheck(["users", "user"], "canDelete"), deleteUser);
 router.post(   "/users/:id/logout", authenticate, requireAdmin, modulePermissionCheck(["users", "user"], "canEdit"),   logoutUserByAdmin);
-router.post(   "/users/bulk-import", authenticate, requireMasterAdmin, upload.single("csv"), bulkImportUsers);
+router.post(   "/users/bulk-validate", authenticate, requireMasterAdmin, uploadCSV.single("csv"), validateCSV);
+router.post(   "/users/bulk-import",   authenticate, requireMasterAdmin, bulkImportUsers);
 
 // ─── Admins (master only) ─────────────────────────────────────────────────────
 router.post(   "/addAdmin",       authenticate, requireMasterAdmin, validate(addAdminSchema), addAdmin);

@@ -23,6 +23,7 @@ import {
 } from "../helpers/user.helper.js";
 import { moveToUserFolder } from "../../../middlewares/upload.js";
 import { sendSuccessResponse, sendErrorResponse } from "../../../common/http/response.js";
+import { BCRYPT_ROUNDS } from "../../../common/constants/app.constants.js";
 
 // ─── Register ─────────────────────────────────────────────────────────────────
 
@@ -38,7 +39,7 @@ export const registerUser = async (req, res) => {
         return sendErrorResponse(res, "Username already taken", 409);
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     const newUser = await insertUser(
       firstName, lastName, userName, hashedPassword, email, phone, gender, null
@@ -84,7 +85,7 @@ export const loginUser = async (req, res) => {
     const token = jwt.sign(formatUserData(user), process.env.JWT_SECRET, { expiresIn: "1h" });
     await saveUserToken(user.id, token);
 
-    return sendSuccessResponse(res, "Login successful", {token}, 200);
+    return sendSuccessResponse(res, "Login successful", { token }, 200);
   } catch (error) {
     console.error("loginUser error:", error);
     return sendErrorResponse(res, "Server error");
@@ -174,7 +175,7 @@ export const changePassword = async (req, res) => {
     const user = await findUserById(req.user.id);
     if (!user) return sendErrorResponse(res, "User not found", 404);
 
-    const hashedNew = await bcrypt.hash(newPassword, 10);
+    const hashedNew = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await updateUserPassword(user.id, hashedNew);
     await deleteUserToken(req.token);
 
@@ -251,7 +252,7 @@ export const resetPassword = async (req, res) => {
     if (record.otp !== otp)
       return sendErrorResponse(res, "Invalid OTP.", 400);
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await updateUserPassword(user.id, hashedPassword);
     await deleteOtp(user.id);
 

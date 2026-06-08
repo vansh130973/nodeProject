@@ -297,6 +297,7 @@ export const deleteOtp = async (userId) => {
     throw error;
   }
 };
+
 /**
  * Given arrays of userNames + emails, return existing rows matching either.
  * Used by bulk import to detect duplicates in one query.
@@ -316,24 +317,84 @@ export const bulkFindExistingUsernamesAndEmails = async (userNames, emails) => {
 };
 
 /**
- * Insert multiple users one by one to capture each insertId.
- * Returns { insertedIds: [{id, _remoteUrl}], affectedRows }
+ * Given arrays of userNames + emails, return existing rows (id, userName, email, isDeleted).
+ * Used by bulk import to split rows into insert vs update.
+ */
+export const bulkFindByUsernamesOrEmails = async (userNames, emails) => {
+  if (!userNames.length && !emails.length) return [];
+  try {
+    const [rows] = await db.query(
+      `SELECT id, userName, email, isDeleted FROM users WHERE userName IN (?) OR email IN (?)`,
+      [userNames.length ? userNames : ["__none__"], emails.length ? emails : ["__none__"]]
+    );
+    return rows;
+  } catch (error) {
+    console.error("bulkFindByUsernamesOrEmails error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Update multiple users one-by-one (matched by userName).
+ * Updates: firstName, lastName, phone, gender, status, isDeleted.
+ * Returns array of { id, _remoteUrl } for updated rows.
+ */
+export const bulkUpdateUsers = async (users) => {
+  if (!users.length) return { updatedIds: [], affectedRows: 0 };
+  const updatedIds = [];
+  for (const u of users) {
+    try {
+      await db.query(
+        `UPDATE users
+            SET firstName = ?, lastName = ?, phone = ?, gender = ?,
+                status = ?, isDeleted = ?, updatedAt = NOW()
+          WHERE userName = ?`,
+        [u.firstName, u.lastName, u.phone, u.gender, u.status, u.isDeleted ?? 0, u.userName]
+      );
+      // Fetch the id so profile-picture logic can reuse it
+      const [rows] = await db.query(
+        "SELECT id FROM users WHERE userName = ? LIMIT 1",
+        [u.userName]
+      );
+      if (rows[0]) updatedIds.push({ id: rows[0].id, _remoteUrl: u._remoteUrl ?? null });
+    } catch (error) {
+      console.error("bulkUpdateUsers row error:", error);
+      // individual failure is tolerated — caller handles fallback
+      throw error;
+    }
+  }
+  return { updatedIds, affectedRows: updatedIds.length };
+};
+
+/**
+ * Insert multiple users in a single query.
  */
 export const bulkInsertUsers = async (users) => {
   if (!users.length) return { insertedIds: [], affectedRows: 0 };
   try {
-    const insertedIds = [];
-    for (const u of users) {
-      const [result] = await db.query(
-        `INSERT INTO users
-           (firstName, lastName, userName, password, email, phone, gender, profilePicture, status, isDeleted)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [u.firstName, u.lastName, u.userName, u.password, u.email,
-         u.phone, u.gender, u.profilePicture ?? null, u.status, u.isDeleted ?? 0]
-      );
-      insertedIds.push({ id: result.insertId, _remoteUrl: u._remoteUrl ?? null });
-    }
-    return { insertedIds, affectedRows: insertedIds.length };
+    // Build one VALUES row per user: (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    const placeholders = users.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+    const values = users.flatMap((u) => [
+      u.firstName, u.lastName, u.userName, u.password, u.email,
+      u.phone, u.gender, u.profilePicture ?? null, u.status, u.isDeleted ?? 0,
+    ]);
+
+    const [result] = await db.query(
+      `INSERT INTO users
+         (firstName, lastName, userName, password, email, phone, gender, profilePicture, status, isDeleted)
+       VALUES ${placeholders}`,
+      values
+    );
+
+    // Recover every insertId: MySQL guarantees firstId … firstId + affectedRows - 1
+    const firstId     = result.insertId;
+    const affectedRows = result.affectedRows;
+    const insertedIds = users.map((u, i) => ({
+      id:         firstId + i,
+      _remoteUrl: u._remoteUrl ?? null,
+    }));
+
+    return { insertedIds, affectedRows };
   } catch (error) {
     console.error("bulkInsertUsers error:", error);
     throw error;

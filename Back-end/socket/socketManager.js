@@ -27,6 +27,9 @@ export const SOCKET_EVENTS = Object.freeze({
   USER_STATUS_CHANGED: "user:statusChanged",
   ADMIN_STATUS_CHANGED: "admin:statusChanged",
   FORCE_LOGOUT: "auth:forceLogout",
+  BULK_IMPORT_STARTED:  "bulkImport:started",
+  BULK_IMPORT_PROGRESS: "bulkImport:progress",
+  BULK_IMPORT_DONE:     "bulkImport:done",
 });
 
 // ─── Force-logout reasons ─────────────────────────────────────────────────────
@@ -214,6 +217,25 @@ export const emitAccountEvent = (type, params) => {
     default:
       console.warn(`[socket] emitAccountEvent — unknown type: "${type}"`);
   }
+};
+
+/**
+ * Bulk import progress emitter.
+ * @param {number} adminId
+ * @param {"started"|"progress"|"done"} type
+ * @param {object} payload
+ *
+ * started  → { total, message }
+ * progress → { phase, processed, total, percent, message }
+ * done     → { success, total, inserted, skipped, invalid, failed, errors, message }
+ */
+export const emitBulkImportEvent = (adminId, type, payload) => {
+  const event = {
+    started:  SOCKET_EVENTS.BULK_IMPORT_STARTED,
+    progress: SOCKET_EVENTS.BULK_IMPORT_PROGRESS,
+    done:     SOCKET_EVENTS.BULK_IMPORT_DONE,
+  }[type];
+  if (event) emitTo("admin", adminId, event, payload);
 };
 
 // Named backward-compat wrappers

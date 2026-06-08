@@ -32,6 +32,7 @@ import {
   emitForceLogoutAdmin,
   emitAdminStatusChanged,
 } from "../../../socket/socketManager.js";
+import { BCRYPT_ROUNDS } from "../../../common/constants/app.constants.js";
 
 /** username "admin" = unrestricted super-admin */
 const isSuperAdmin = (userName) => userName === "admin";
@@ -71,7 +72,7 @@ export const addAdmin = async (req, res) => {
       return sendErrorResponse(res, "Selected role is invalid or inactive", 400);
     }
 
-    const hashedPassword = await bcrypt.hash(String(password), 10);
+    const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
     const insertedAdmin = await insertAdmin(userName, hashedPassword, email, phone, roleId);
 
     return sendSuccessResponse(res, "Admin registered successfully", {
@@ -268,7 +269,7 @@ export const editUser = async (req, res) => {
 
     let hashedPassword;
     if (password && password.trim()) {
-      hashedPassword = await bcrypt.hash(password, 10);
+      hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
     }
 
     const updated = await updateUserByAdmin(id, { firstName, lastName, email, phone, gender, password: hashedPassword });
@@ -344,7 +345,7 @@ export const editAdmin = async (req, res) => {
 
     let hashedPassword;
     if (password && password.trim()) {
-      hashedPassword = await bcrypt.hash(password, 10);
+      hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
     }
 
     const updated = await updateAdminByMaster(id, { userName, email, phone, password: hashedPassword, roleId });
@@ -426,7 +427,7 @@ export const changeAdminOwnPassword = async (req, res) => {
     const match = await bcrypt.compare(String(currentPassword), admin.password);
     if (!match) return sendErrorResponse(res, "Current password is incorrect", 400);
 
-    const hashed = await bcrypt.hash(String(newPassword), 10);
+    const hashed = await bcrypt.hash(String(newPassword), BCRYPT_ROUNDS);
     await updateAdminPassword(id, hashed);
     await deleteAdminToken(id);
 

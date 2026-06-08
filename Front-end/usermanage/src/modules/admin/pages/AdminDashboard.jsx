@@ -1900,7 +1900,6 @@ const AdminDashboard = () => {
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                     <option value="pending">Pending</option>
-                    <option value="deleted">Deleted</option>
                   </select>
                 </div>
                 <div className="d-flex align-items-center gap-2">

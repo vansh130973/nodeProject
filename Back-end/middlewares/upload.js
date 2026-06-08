@@ -1,6 +1,12 @@
 import multer from "multer";
 import path from "path";
 import { promises as fs } from "fs";
+import {
+  IMAGE_MIMETYPE,
+  IMAGE_MAX_FILE_BYTES,
+  BULK_IMPORT_UPLOADS_SUBDIR,
+  BULK_IMPORT_MAX_FILE_BYTES,
+} from "../common/constants/app.constants.js";
 
 // Store temporarily in uploads/tmp/ — moved to uploads/{userId}/ after DB insert
 const storage = multer.diskStorage({
@@ -16,7 +22,14 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: IMAGE_MAX_FILE_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (IMAGE_MIMETYPE.includes(file.mimetype)) return cb(null, true);
+    cb(new Error("Only JPEG, PNG, and WebP images are allowed"));
+  },
+});
 
 export default upload;
 
@@ -65,3 +78,23 @@ export const moveTicketAttachment = async (file, ticketId, subfolder = "") => {
 
   return finalPath.replace(/\\/g, "/");
 };
+
+/**
+ * CSV-specific storage — saves to BULK_IMPORT_UPLOADS_SUBDIR with a unique filename.
+ * Used exclusively by the bulk import route.
+ */
+const csvStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    await fs.mkdir(BULK_IMPORT_UPLOADS_SUBDIR, { recursive: true });
+    cb(null, BULK_IMPORT_UPLOADS_SUBDIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".csv";
+    cb(null, `csv_${Date.now()}_${Math.floor(Math.random() * 100000)}${ext}`);
+  },
+});
+
+export const uploadCSV = multer({
+  storage: csvStorage,
+  limits: { fileSize: BULK_IMPORT_MAX_FILE_BYTES },
+});
